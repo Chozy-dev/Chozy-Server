@@ -37,10 +37,16 @@ server:
     include-exception: false
 springdoc:
   api-docs:
+    version: openapi_3_1
     enabled: false
+  default-produces-media-type: application/json
+  override-with-generic-response: false
   swagger-ui:
     enabled: false
+    persist-authorization: false
 app:
+  usage:
+    free-monthly-report-limit: ${FREE_MONTHLY_REPORT_LIMIT:3}
   security:
     docs-public: false
     allowed-origins: ${CORS_ALLOWED_ORIGINS:}

@@ -1,6 +1,8 @@
 package com.chozy.server.common.security;
 
 import com.chozy.server.common.error.ErrorCode;
+import com.chozy.server.member.service.MemberAccess;
+import org.springframework.beans.factory.ObjectProvider;
 import java.util.List;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.*;
@@ -15,9 +17,9 @@ public class SecurityConfiguration {
   @Bean
   SecurityFilterChain securityFilterChain(
       HttpSecurity http, SecurityProperties properties, SecurityErrorWriter errors,
-      org.springframework.beans.factory.ObjectProvider<JwtTokens> tokens)
+      ObjectProvider<JwtTokens> tokens, ObjectProvider<MemberAccess> members)
       throws Exception {
-    http.addFilterBefore(new JwtAuthenticationFilter(tokens, errors),
+    http.addFilterBefore(new JwtAuthenticationFilter(tokens, members, errors),
             org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class)
         .csrf(csrf -> csrf.disable())
         .cors(cors -> cors.configurationSource(corsConfigurationSource(properties)))

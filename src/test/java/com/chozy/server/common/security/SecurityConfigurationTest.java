@@ -48,6 +48,14 @@ class SecurityConfigurationTest {
                 .header("Access-Control-Request-Headers", "Authorization"))
         .andExpect(status().isOk())
         .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:3000"));
+    mvc.perform(options("/my/profile")
+            .header("Origin", "http://localhost:3000")
+            .header("Access-Control-Request-Method", "PATCH")
+            .header("Access-Control-Request-Headers", "Authorization, Content-Type"))
+        .andExpect(status().isOk())
+        .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:3000"))
+        .andExpect(header().string("Access-Control-Allow-Headers", "Authorization, Content-Type"))
+        .andExpect(header().doesNotExist("Access-Control-Allow-Credentials"));
     mvc.perform(
             options("/my/dashboard")
                 .header("Origin", "https://untrusted.example")

@@ -12,6 +12,14 @@ spring:
   flyway:
     enabled: true
 
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+
 app:
   auth:
     unverified-signup-enabled: true
+  security:
+    docs-public: true

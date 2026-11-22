@@ -71,7 +71,7 @@ class MemberDatabaseIT {
     try (Connection c = connection(); Statement s = c.createStatement()) {
       var rows = s.executeQuery("SELECT count(*) FROM chozy.flyway_schema_history WHERE version IS NOT NULL AND success");
       rows.next();
-      assertThat(rows.getInt(1)).isEqualTo(3);
+      assertThat(rows.getInt(1)).isEqualTo(5);
       var collectorHistory = s.executeQuery("SELECT to_regclass('public.schema_migrations') IS NULL");
       collectorHistory.next();
       assertThat(collectorHistory.getBoolean(1)).isTrue();

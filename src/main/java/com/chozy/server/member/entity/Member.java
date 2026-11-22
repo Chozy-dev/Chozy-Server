@@ -30,6 +30,12 @@ public class Member {
   private String verifiedDiHash;
   @Column(name = "di_verified_at")
   private Instant diVerifiedAt;
+  @Column(name = "credential_version", nullable = false)
+  private long credentialVersion;
+  @Column(name = "marketing_agreed", nullable = false)
+  private boolean marketingAgreed;
+  @Column(name = "marketing_updated_at")
+  private Instant marketingUpdatedAt;
 
   protected Member() {}
 
@@ -53,4 +59,23 @@ public class Member {
   public Long getId() { return id; }
   public String getLoginId() { return loginId; }
   public String getEmail() { return email; }
+  public long getCredentialVersion() { return credentialVersion; }
+  public boolean isMarketingAgreed() { return marketingAgreed; }
+  public Instant getMarketingUpdatedAt() { return marketingUpdatedAt; }
+
+  public void updateProfile(String nickname, String email, Instant now) {
+    if (nickname != null) this.nickname = nickname;
+    if (email != null) this.email = email;
+    updatedAt = now;
+  }
+
+  public void changePassword(String encodedPassword) {
+    passwordHash = encodedPassword;
+    credentialVersion++;
+  }
+
+  public void changeMarketingConsent(boolean agreed, Instant now) {
+    marketingAgreed = agreed;
+    marketingUpdatedAt = now;
+  }
 }
