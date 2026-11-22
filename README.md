@@ -2,7 +2,7 @@
 
 위탁 셀러의 상품 소싱 검증 서비스 Chozy의 Spring Boot 백엔드입니다. 프론트엔드 REST API와 사용자 기능을 담당하며, 상품 수집·공급 점수 계산·정기 추천 발행은 별도 Python Collector가 담당합니다.
 
-현재는 **공통 기반·격리 개발 DB·일반 계정 인증·마이페이지 회원 관리·무료 정밀분석 사용량 조회**를 구현했습니다. 기본 실행과 테스트에는 PostgreSQL이나 외부 API가 필요하지 않습니다.
+현재 진척과 다음 작업은 [서버 현황](docs/CONTEXT.md)에서 확인할 수 있습니다. 기본 실행과 테스트에는 PostgreSQL이나 외부 API가 필요하지 않습니다.
 
 ## 기술 환경
 
@@ -62,7 +62,7 @@ $env:CORS_ALLOWED_ORIGINS='http://localhost:3000'
 | --- | --- | --- |
 | 기본값 `offline` | 비활성 | 비활성 |
 | `dev` (`offline` 포함) | 비활성 | 공개 |
-| `dbdev` | 격리된 로컬 PostgreSQL, Flyway 적용 | 공개, 구현 API 10개 |
+| `dbdev` | 격리된 로컬 PostgreSQL, Flyway 적용 | 공개 |
 | `database` | 명시적인 접속 설정 필요 | 기본 비활성 |
 | `prod` (`database` 포함) | 명시적인 접속 설정 필요 | 기본 비활성, 별도 제어 |
 
@@ -106,6 +106,7 @@ Chozy_Server/
 ├── .gitattributes               소스와 실행 스크립트 줄바꿈 기준
 ├── docs/
 │   ├── BACKEND.md               아키텍처·개발 규칙·연동 경계
+│   ├── CONTEXT.md               현재 진척·제약·검증·다음 작업
 │   └── references/              기획서·API 명세 원본
 ├── src/main/
 │   ├── java/com/chozy/server/
@@ -140,16 +141,17 @@ Chozy_Server/
 
 ## 개발 문서
 
+- [서버 현황](docs/CONTEXT.md) — 현재 진척, 구조 요약, 남은 문제와 다음 작업
 - [백엔드 구조·개발 규칙](docs/BACKEND.md): 패키지 책임, 응답·보안 계약, DB 관리와 외부 연동 경계, 미확정 사항
 - [기획서·API 명세](docs/references/): API 구현 시 확인할 원본 자료
 - [Collector 현재 상태](../product-data-collector/docs/CONTEXT.md): 수집·발행 시스템의 현재 구현 및 운영 미완료 항목
 
-작업 결과는 프로젝트 최상위 `temp.md`에 기록하며 Git에서 제외합니다. 매번 기존 내용을 전부 지우고 최신 작업 결과로 파일 전체를 덮어씁니다. 이전 결과에 이어 쓰거나 이력을 누적하지 않습니다. 지속해서 유지할 사용법은 README, 설계 규칙은 BACKEND 문서에서 관리합니다.
+작업 결과는 Git에서 제외한 프로젝트 최상위 `temp.md`에 최신 내용으로 덮어씁니다. 변경으로 진척이나 제약이 달라지면 CONTEXT를 갱신합니다.
 
 
 ## 프론트엔드 API 테스트
 
-Swagger에서 인증·회원·홈 API를 테스트하려면 기존 [격리 개발 DB](#격리-개발-db-실행)를 실행하고 `dbdev`로 Spring을 기동합니다. Swagger를 활성화하는 추가 플래그는 필요 없습니다. `dev` 프로필은 DB 없이 실행되므로 업무 API가 등록되지 않습니다.
+Swagger에서 인증·회원·홈 API를 테스트하려면 기존 [격리 개발 DB](#격리-개발-db-실행)를 실행하고 `dbdev`로 Spring을 기동합니다. Swagger를 활성화하는 추가 플래그는 필요 없습니다. `dev` 프로필은 DB 없이 실행되므로 업무 API가 등록되지 않습니다. 직접 입력 정밀분석은 실제 분석 엔진이 등록되기 전까지 요청에 R003/503을 반환합니다.
 
 - API 기본 주소 `http://localhost:8080`
 - Swagger UI [http://localhost:8080/swagger-ui/index.html](http://localhost:8080/swagger-ui/index.html)

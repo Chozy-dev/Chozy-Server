@@ -19,7 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.IllegalTransactionStateException;
 
 class ReportUsageDatabaseIT extends AccountPostgresITSupport {
-  private static final AtomicLong REPORT_IDS = new AtomicLong();
+  private static final AtomicLong REPORT_IDS = new AtomicLong(1_000_000);
 
   @Autowired ReportUsageService usage;
 

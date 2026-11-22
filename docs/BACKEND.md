@@ -2,7 +2,7 @@
 
 ## 문서와 설정의 역할
 
-실행·IntelliJ·환경변수·빌드 방법은 [README](../README.md)를 따른다. 이 문서는 아키텍처와 개발 규칙을 관리한다. 작업별 결과는 Git에서 제외한 `temp.md`에 기록한다. 작성할 때마다 이전 내용을 전부 지우고 최신 작업 결과로 파일 전체를 덮어쓴다. 이어 쓰기와 결과 이력 누적은 하지 않는다.
+실행·IntelliJ·환경변수·빌드 방법은 [README](../README.md)를 따른다. 이 문서는 아키텍처와 개발 규칙을 관리한다. 현재 진척과 다음 작업은 [CONTEXT](CONTEXT.md)에 기록한다. 작업별 결과는 Git에서 제외한 `temp.md`에 최신 내용으로 덮어쓴다.
 
 설정은 `application.yml`을 공통값으로, `application-{profile}.yml`을 환경 차이로 관리한다. 비밀값은 환경변수로 주입하며 `.env` 자동 로드를 가정하지 않는다. 기본/일반 테스트 환경은 DB 없이 실행한다. DB 접속은 격리 개발용 `dbdev` 또는 별도 검토한 `database/prod`에서 활성화한다.
 
@@ -43,7 +43,7 @@ DTO는 API 입력·출력 계약이며 Entity를 그대로 반환하거나 요�
 
 인증 공개 경로 4개만 method/path로 허용하며 다른 업무 경로는 기본 인증 필수다. `common.security.JwtAuthenticationFilter`는 Bearer Access Token의 서명과 만료를 확인한 뒤 회원의 현재 자격 증명 버전을 검증한다. `@AuthenticationPrincipal AuthenticatedMember`에서 회원 ID를 얻고 Service에서 자원 소유권을 검증한다. 잘못된 Authorization은 공개 API에서도 오류를 반환한다. OpenAPI의 bearerAuth는 로그아웃과 3단계 인증 API에 적용했다. offline/dev는 DB 의존 업무 빈 없이 기동한다.
 
-OpenAPI 3.1은 MVC 매핑과 실제 DTO에서 요청·성공 스키마를 생성한다. `@OpenApiContract`는 공통 오류와 API별 오류를 문서에 추가하고 기존 `ErrorCode`에서 예시를 생성한다. `dbdev`는 구현 API 10개, `dev`는 DB 없는 공통 문서를 공개한다. `offline/database/prod`는 기본 비활성이다. Swagger UI 인증은 현재 페이지에서만 유지한다. 접속·프론트엔드 설정은 [README](../README.md#프론트엔드-api-테스트)를 따른다.
+OpenAPI 3.1은 MVC 매핑과 실제 DTO에서 요청·성공 스키마를 생성한다. `@OpenApiContract`는 공통 오류와 API별 오류를 문서에 추가하고 기존 `ErrorCode`에서 예시를 생성한다. `dbdev`는 업무 API 문서, `dev`는 DB 없는 공통 문서를 공개한다. `offline/database/prod`는 기본 비활성이다. Swagger UI 인증은 현재 페이지에서만 유지한다. 접속·프론트엔드 설정은 [README](../README.md#프론트엔드-api-테스트)를 따른다.
 
 API를 구현할 때 **HTTP 메서드 + 정확한 경로**를 SecurityConfiguration에 등록한다. `/auth/**`, `/home/**`, `/search/**` 전체 공개는 금지한다. 현재 명세 분류:
 
@@ -125,6 +125,8 @@ Java는 UTF-8, 공백 2칸을 사용하며 Maven XML은 공백 4칸을 사용한
 
 ## 검증과 다음 API 개발
 
+다음 구현 범위는 [서버 개발 순서](CONTEXT.md#개발-순서)를 따른다.
+
 `./mvnw.cmd -B verify`는 외부 API·DB 없이 공통 응답, MVC 오류, 민감정보 비노출, 보안 차단, CORS, OpenAPI와 DB 인프라 부재를 검증한다. 테스트 전용 Probe Controller는 src/test에만 두며 배포 JAR에는 포함되지 않는다. 데이터/외부 시스템 통합 검증은 별도 격리 환경과 명시적인 자격증명으로 추가한다. 운영 DB로 실패를 해결하지 않는다.
 
 다음 API는 원문 method/path/request/response/JWT부터 확인하고 해당 기능의 Controller·DTO·Service·필요한 Repository만 추가한다. 인증 규칙과 소유권, 실제 HTTP 상태/envelope 일치, 정상/검증/인증/권한 오류 테스트를 함께 작성한다. 자체 데이터 변경은 전용 migration으로 리뷰한다. 완료 발행 조회와 실시간 호출은 별도 통합 책임으로 유지한다. 구현하지 않은 API를 문서나 코드에 엔드포인트로 등록하지 않는다.
@@ -205,7 +207,7 @@ JWT 구현 참고: [Spring Security 공식 JWT 문서](https://docs.spring.io/sp
 V5는 `report_usage_entries`, `member_screening_runs`, `member_favorites`를 추가한다. `ReportUsageService`가 홈과 마이페이지의 공통 집계값을 제공한다. 월간 무료 기본 한도는 `app.usage.free-monthly-report-limit` / `FREE_MONTHLY_REPORT_LIMIT`에서 설정하며 기본값은 3이다. 매월 1일 00:00 KST에 읽는 집계 월이 바뀐다. 이전 달 기록은 유지하며 한도를 낮춘 경우 잔여 횟수의 최솟값은 0이다.
 
 - 정밀분석 구현 시 성공한 **새 리포트**의 저장 트랜잭션에서 `recordCreatedReport(memberId, reportId, dataLabQuotaExhausted)`를 호출한다. PostgreSQL의 기본 READ COMMITTED 트랜잭션을 사용한다. 같은 회원의 차감 검증과 원장 기록은 회원 행 잠금으로 직렬화하고, 리포트 ID의 기본 키로 재시도 중복을 막는다. 정밀분석은 한도 초과 예외가 발생하면 리포트 저장도 롤백해야 한다.
-- 실패, 저장 리포트 열기, 옵션 변경과 재계산은 원장에 기록하지 않는다. 데이터랩의 공유 호출 한도가 100% 소진되어 트렌드·지속성을 제외한 리포트는 신뢰할 수 있는 연동 결과로 면제 여부를 전달한다. 면제 기록은 무료 횟수 집계에서 제외한다. 아직 분석 요청 접수 단계의 선차단·예약 정책, 두 한도가 모두 소진되었을 때의 접수 순서, 일일 안전 상한, 한도 초과 HTTP 코드와 데이터랩 예산 연동 계약을 확정해야 한다.
+- 실패, 저장 리포트 열기, 옵션 변경과 재계산은 원장에 기록하지 않는다. 데이터랩의 공유 호출 한도가 100% 소진되어 트렌드·지속성을 제외한 리포트는 신뢰할 수 있는 연동 결과로 면제 여부를 전달한다. 면제 기록은 무료 횟수 집계에서 제외한다. 직접 입력 접수·예약 정책은 아래 4단계를 따르며, 일일 사용량 정책과 데이터랩 예산 연동은 후속 작업이다.
 - 스크리닝은 해당 회원의 KST 월 구간에 저장된 실행 행, 관심상품은 해당 회원의 `INTERESTED`와 `SELLING` 등록 행을 센다. 3단계에는 실행·등록 API와 운영 데이터 생성 경로가 없다. 후속 기능에서 실행 및 등록 도메인 필드·제약을 추가하고 실제 저장 데이터와 연결한다.
 
 ### 검증과 남은 작업
@@ -218,4 +220,11 @@ V5는 `report_usage_entries`, `member_screening_runs`, `member_favorites`를 추
 
 Spring이 JPA 스키마 검증을 통과하고 `127.0.0.1:8080`에서 기동했다. `springdoc.api-docs.enabled`, `springdoc.swagger-ui.enabled`, `app.security.docs-public`을 검증 기동에만 활성화해 Swagger UI와 OpenAPI JSON의 HTTP 200을 확인했다. 실제 HTTP로 인증·마이페이지·홈 사용량 10개 경로의 성공 응답과 토큰 폐기를 검증했다. 임시 회원, Refresh, 동의 이력 행을 정리한 뒤 업무 테이블 6개의 행 수가 API 검증 전과 동일하게 0건이었다. 검증에 사용한 JWT 키는 프로세스 환경에만 주입했다. 지속 개발에서 토큰을 재시작 이후에도 사용하려면 같은 개발 키를 비밀 저장소나 IDE 환경변수에서 주입한다.
 
-운영 Migration과 운영 전용 계정·권한·DSN 연결은 별도 작업이다. Collector 예산·발행 연동, 실제 정밀분석·리포트 생성, 스크리닝, 관심상품 등록, 서비스 알림, 회원탈퇴는 후속 구현이다. 휴대폰 본인인증, 카카오·네이버 로그인 및 계정 연결, 이메일 인증, 비밀번호 찾기·재설정은 추후 구현 예정이다.
+## 4단계 직접 입력 정밀분석 작업과 저장
+
+DB 프로필에서 JWT로 `POST /search/analyses/manual`, `GET /search/analyses/{analysisId}/status`, `GET /search/reports/{reportId}`를 제공한다. V6는 `chozy.manual_analysis_jobs`와 리포트 JSON 스냅샷 저장소를 추가한다. 상태와 리포트는 회원 ID를 조건으로 조회하며 타인과 없는 ID는 모두 C003/404다.
+
+- 접수는 회원 행 잠금 아래 월 사용량과 진행 중 작업 수를 읽는다. 월 한도 소진은 R001/429, 남은 자리가 모두 예약된 경우는 R002/409다. 다음 갱신 일시는 `GET /my/dashboard`의 `reportUsage.nextResetAt`을 사용한다. 이 개발 계약은 월 한도를 접수에서 먼저 적용하므로 월 한도와 데이터랩 한도가 동시에 소진된 경우도 월 한도에 따라 거절한다. 예약은 차감에 포함하지 않으며 작업 종료 시 해제한다.
+- `ManualAnalysisEngine`이 등록된 환경에서만 202/PENDING으로 작업을 저장한다. 미등록 시 R003/503을 반환한다. 작업기는 짧은 트랜잭션에서 `SKIP LOCKED`로 작업을 가져오고 엔진은 트랜잭션 밖에서 실행한다. 점유 시간은 5분이며 기한을 지난 작업은 실패 처리한다. 재요청은 회원이 시작한다. 중간 단계 보고는 현재 미연동으로 대기 0, 처리/실패 1, 완료 7을 반환한다.
+- 완료 상태·리포트·사용량 원장 저장은 한 트랜잭션이다. 기한 내 처리 중인 작업만 완료할 수 있다. 차감 실패 시 리포트도 롤백한다. 실제 데이터랩 한도 소진 시 차감 면제를 전달할 책임은 엔진에 있다. 리포트 조회는 저장된 JSON에 서버 식별자를 붙여 반환한다.
+- 실제 시장 데이터·분석 산식을 제공하는 엔진 구현은 후속 작업이다. 격리 테스트 엔진은 작업·저장·차감 경계 검증 전용이다. 전체 리포트 필드와 세부 진행 단계는 실엔진과 함께 연결한다.

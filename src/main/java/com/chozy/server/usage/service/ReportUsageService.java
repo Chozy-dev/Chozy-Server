@@ -4,6 +4,7 @@ import com.chozy.server.member.service.MemberAccess;
 import com.chozy.server.usage.config.ReportUsageProperties;
 import com.chozy.server.usage.repository.ReportUsageRepository;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Profile;
@@ -47,13 +48,24 @@ public class ReportUsageService {
   @Transactional(propagation = Propagation.MANDATORY)
   public void recordCreatedReport(long memberId, long reportId, boolean dataLabQuotaExhausted) {
     members.lock(memberId);
+    recordLocked(memberId, reportId, dataLabQuotaExhausted, clock.instant());
+  }
+
+  @Transactional(propagation = Propagation.MANDATORY)
+  public void recordCreatedReport(long memberId, long reportId, boolean dataLabQuotaExhausted,
+      Instant completedAt) {
+    members.lock(memberId);
+    recordLocked(memberId, reportId, dataLabQuotaExhausted, completedAt);
+  }
+
+  private void recordLocked(long memberId, long reportId, boolean dataLabQuotaExhausted, Instant completedAt) {
     var existingOwner = repository.findReportOwner(reportId);
     if (existingOwner.isPresent()) {
       if (existingOwner.get() != memberId) throw new IllegalArgumentException("Report owner mismatch");
       return;
     }
 
-    var now = clock.instant().truncatedTo(ChronoUnit.MICROS);
+    var now = completedAt.truncatedTo(ChronoUnit.MICROS);
     var month = UsageMonth.at(now);
     if (!dataLabQuotaExhausted && forMonth(memberId, month).remainingCount() == 0)
       throw new ReportQuotaExceededException();
