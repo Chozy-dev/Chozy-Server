@@ -151,7 +151,7 @@ Chozy_Server/
 
 ## 프론트엔드 API 테스트
 
-Swagger에서 인증·회원·홈 API를 테스트하려면 기존 [격리 개발 DB](#격리-개발-db-실행)를 실행하고 `dbdev`로 Spring을 기동합니다. Swagger를 활성화하는 추가 플래그는 필요 없습니다. `dev` 프로필은 DB 없이 실행되므로 업무 API가 등록되지 않습니다. 직접 입력 정밀분석은 실제 분석 엔진이 등록되기 전까지 요청에 R003/503을 반환합니다.
+Swagger에서 인증·회원·홈·리포트 API를 테스트하려면 기존 [격리 개발 DB](#격리-개발-db-실행)를 실행하고 `dbdev`로 Spring을 기동합니다. Swagger를 활성화하는 추가 플래그는 필요 없습니다. `dev` 프로필은 DB 없이 실행되므로 업무 API가 등록되지 않습니다. 직접 입력 정밀분석은 실제 분석 엔진이 등록되기 전까지 요청에 R003/503을 반환합니다. 리포트 상세·의견 API를 호출하려면 본인의 저장된 리포트가 필요합니다.
 
 - API 기본 주소 `http://localhost:8080`
 - Swagger UI [http://localhost:8080/swagger-ui/index.html](http://localhost:8080/swagger-ui/index.html)
