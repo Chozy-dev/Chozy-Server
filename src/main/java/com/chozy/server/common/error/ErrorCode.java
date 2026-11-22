@@ -1,0 +1,41 @@
+package com.chozy.server.common.error;
+
+public enum ErrorCode {
+  INVALID_INPUT(400, "C001", "입력하신 정보가 올바르지 않습니다. 다시 확인해 주세요."),
+  DUPLICATE(409, "C002", "이미 등록된 정보입니다. 다른 정보로 시도해 주세요."),
+  NOT_FOUND(404, "C003", "요청하신 페이지나 기능을 찾을 수 없습니다."),
+  INTERNAL_ERROR(500, "C004", "일시적인 서버 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."),
+  TYPE_MISMATCH(400, "C005", "입력 형식이 올바르지 않습니다. 올바른 형식으로 입력해 주세요."),
+  FORBIDDEN(403, "C006", "해당 작업에 대한 권한이 없습니다."),
+  METHOD_NOT_ALLOWED(405, "C007", "지원하지 않는 요청 방식입니다. 올바른 방식으로 다시 시도해 주세요."),
+  MISSING_PARAMETER(400, "C008", "필수 파라미터가 누락되었습니다. 요청을 확인해 주세요."),
+  INVALID_JSON(400, "C009", "JSON 형식이 올바르지 않습니다. 요청 데이터를 확인해 주세요."),
+  UNSUPPORTED_MEDIA_TYPE(415, "C010", "지원하지 않는 미디어 타입입니다."),
+  FILE_TOO_LARGE(400, "C011", "파일 크기가 허용된 범위를 초과했습니다."),
+  REQUEST_TIMEOUT(408, "C012", "요청 시간이 초과되었습니다. 다시 시도해 주세요."),
+  ACCESS_TOKEN_EXPIRED(401, "A003", "로그인이 만료되었습니다. 다시 로그인해 주세요."),
+  INVALID_AUTHENTICATION(401, "A004", "인증 정보가 올바르지 않습니다. 다시 로그인해 주세요."),
+  REFRESH_TOKEN_EXPIRED(401, "A005", "로그인 세션이 만료되었습니다. 다시 로그인해 주세요."),
+  INVALID_VERIFICATION_CODE(400, "A006", "인증번호가 올바르지 않거나 만료되었습니다. 다시 확인해 주세요.");
+  private final int status;
+  private final String code;
+  private final String message;
+
+  ErrorCode(int status, String code, String message) {
+    this.status = status;
+    this.code = code;
+    this.message = message;
+  }
+
+  public int status() {
+    return status;
+  }
+
+  public String code() {
+    return code;
+  }
+
+  public String message() {
+    return message;
+  }
+}

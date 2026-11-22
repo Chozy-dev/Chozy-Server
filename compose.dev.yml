@@ -1,0 +1,23 @@
+name: chozy-spring-dev
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${CHOZY_DEV_DB_NAME:-chozy_spring_dev}
+      POSTGRES_USER: ${CHOZY_DEV_DB_USERNAME:-chozy_spring_dev}
+      POSTGRES_PASSWORD: ${CHOZY_DEV_DB_PASSWORD:?Set CHOZY_DEV_DB_PASSWORD}
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - spring_dev_data:/var/lib/postgresql/data
+    networks: [spring_dev]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U chozy_spring_dev -d chozy_spring_dev"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+volumes:
+  spring_dev_data:
+networks:
+  spring_dev:

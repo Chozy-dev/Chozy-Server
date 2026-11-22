@@ -1,0 +1,2 @@
+org.springframework.boot.env.EnvironmentPostProcessor=\
+com.chozy.server.common.config.DatabaseSafetyEnvironmentPostProcessor
