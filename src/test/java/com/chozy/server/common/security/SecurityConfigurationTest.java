@@ -20,7 +20,7 @@ class SecurityConfigurationTest {
 
   @ParameterizedTest
   @CsvSource({
-    "/auth/login,POST",
+    "/auth/logout,POST",
     "/home/products/recommended,GET",
     "/my/dashboard,GET",
     "/unimplemented,GET"

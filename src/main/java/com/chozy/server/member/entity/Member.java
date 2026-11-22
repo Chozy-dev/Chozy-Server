@@ -33,7 +33,7 @@ public class Member {
 
   protected Member() {}
 
-  /** Accepts an encoded password only. Verification and signup are future service responsibilities. */
+  /** Accepts an encoded password only. Signup validation belongs to the auth service. */
   public Member(String loginId, String passwordHash, String nickname, String email,
       Instant termsAgreedAt, Instant privacyAgreedAt) {
     this.loginId = loginId.strip().toLowerCase(Locale.ROOT);
@@ -45,6 +45,10 @@ public class Member {
     this.createdAt = Instant.now();
     this.updatedAt = createdAt;
   }
+
+  public String getPasswordHash() { return passwordHash; }
+  public String getNickname() { return nickname; }
+  public Instant getCreatedAt() { return createdAt; }
 
   public Long getId() { return id; }
   public String getLoginId() { return loginId; }
