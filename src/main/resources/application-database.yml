@@ -1,0 +1,12 @@
+# Explicit opt-in only. Review account/schema/privileges before activating.
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  datasource:
+    url: ${CHOZY_DB_URL}
+    username: ${CHOZY_DB_USERNAME}
+    password: ${CHOZY_DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 5
+      connection-timeout: 5000
