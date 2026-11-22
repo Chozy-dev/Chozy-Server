@@ -2,7 +2,7 @@
 
 위탁 셀러의 상품 소싱 검증 서비스 Chozy의 Spring Boot 백엔드입니다. 프론트엔드 REST API와 사용자 기능을 담당하며, 상품 수집·공급 점수 계산·정기 추천 발행은 별도 Python Collector가 담당합니다.
 
-현재는 **공통 기반·격리 개발 DB와 일반 회원가입·로그인·JWT 인증·토큰 재발급·로그아웃**까지 구현했습니다. 본인인증·소셜 로그인과 개별 업무 API는 미구현입니다. 기본 실행과 테스트에는 PostgreSQL이나 외부 API가 필요하지 않습니다.
+현재는 **공통 기반·격리 개발 DB·일반 계정 인증·마이페이지 회원 관리·무료 정밀분석 사용량 조회**를 구현했습니다. 기본 실행과 테스트에는 PostgreSQL이나 외부 API가 필요하지 않습니다.
 
 ## 기술 환경
 
@@ -30,11 +30,9 @@ java -version
 macOS/Linux에서는 `./mvnw`를 사용합니다. 실행 권한이 없으면 `sh ./mvnw`로 실행할 수 있습니다.
 
 - 서버: `http://localhost:8080`
-- 개발용 Swagger UI: [http://localhost:8080/swagger-ui/index.html](http://localhost:8080/swagger-ui/index.html)
-- OpenAPI JSON: [http://localhost:8080/v3/api-docs](http://localhost:8080/v3/api-docs)
+- 전체 API의 Swagger 테스트는 [프론트엔드 API 테스트](#프론트엔드-api-테스트)를 참고합니다.
 - 종료: 실행 터미널에서 `Ctrl+C`
 
-`dbdev` Swagger에는 5개 인증 API가 표시됩니다. `offline/dev`는 DB 없는 공통 기반 실행용이며 인증 API는 등록하지 않습니다. `/`와 업무 경로에 비인증으로 요청하면 `401/A004`가 반환됩니다. 이는 기본 접근 제한이 적용된 결과입니다.
 
 빌드한 JAR를 실행하려면:
 
@@ -64,7 +62,7 @@ $env:CORS_ALLOWED_ORIGINS='http://localhost:3000'
 | --- | --- | --- |
 | 기본값 `offline` | 비활성 | 비활성 |
 | `dev` (`offline` 포함) | 비활성 | 공개 |
-| `dbdev` | 격리된 로컬 PostgreSQL, Flyway 적용 | 기본 비활성 |
+| `dbdev` | 격리된 로컬 PostgreSQL, Flyway 적용 | 공개, 구현 API 10개 |
 | `database` | 명시적인 접속 설정 필요 | 기본 비활성 |
 | `prod` (`database` 포함) | 명시적인 접속 설정 필요 | 기본 비활성, 별도 제어 |
 
@@ -149,20 +147,32 @@ Chozy_Server/
 작업 결과는 프로젝트 최상위 `temp.md`에 기록하며 Git에서 제외합니다. 매번 기존 내용을 전부 지우고 최신 작업 결과로 파일 전체를 덮어씁니다. 이전 결과에 이어 쓰거나 이력을 누적하지 않습니다. 지속해서 유지할 사용법은 README, 설계 규칙은 BACKEND 문서에서 관리합니다.
 
 
-## JWT 인증 API 실행
+## 프론트엔드 API 테스트
 
-기존 개발 DB 실행 명령을 사용하고 인증 API는 `dbdev`로 실행합니다. 이미 실행 중인 Compose/volume을 재사용하며 초기화하지 않습니다. DB 프로필에는 별도로 JWT 키가 필수입니다. 키를 바꾸면 기존 토큰은 검증되지 않으므로 재시작 시 동일 키를 안전하게 주입합니다.
+Swagger에서 인증·회원·홈 API를 테스트하려면 기존 [격리 개발 DB](#격리-개발-db-실행)를 실행하고 `dbdev`로 Spring을 기동합니다. Swagger를 활성화하는 추가 플래그는 필요 없습니다. `dev` 프로필은 DB 없이 실행되므로 업무 API가 등록되지 않습니다.
+
+- API 기본 주소 `http://localhost:8080`
+- Swagger UI [http://localhost:8080/swagger-ui/index.html](http://localhost:8080/swagger-ui/index.html)
+- OpenAPI 3.1 JSON [http://localhost:8080/v3/api-docs](http://localhost:8080/v3/api-docs)
+
+기존 DB 비밀번호와 32바이트 이상 Base64 개발 JWT 키는 환경변수로 전달합니다. 서버를 재시작해도 기존 토큰을 유지하려면 같은 JWT 키를 사용합니다.
 
 ```powershell
-# 첫 개발 키 생성: 값을 비밀 저장소/IDE 환경변수에 보관하고 재사용
-$env:JWT_SECRET_BASE64=[Convert]::ToBase64String([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
-$env:JWT_ACCESS_SECONDS='3600'
-$env:JWT_REFRESH_SECONDS='1209600'
 $env:CHOZY_DEV_DB_PASSWORD='<기존 개발 DB 비밀번호>'
-.\mvnw.cmd spring-boot:run '-Dspring-boot.run.profiles=dbdev'
+$env:JWT_SECRET_BASE64='<비밀 저장소에 보관한 개발 JWT 키>'
+# Swagger UI는 같은 origin을 사용합니다. 아래는 별도로 실행하는 프론트엔드용 예시입니다.
+$env:CORS_ALLOWED_ORIGINS='http://localhost:3000,http://localhost:5173'
+.\mvnw.cmd spring-boot:run '-Dspring-boot.run.profiles=dbdev' '-Dspring-boot.run.arguments=--server.address=127.0.0.1'
 ```
 
-Swagger: http://localhost:8080/swagger-ui/index.html . POST `/auth/signup` → POST `/auth/login` → 반환 Access로 Authorize → POST `/auth/logout` 흐름으로 확인합니다. GET `/auth/check-login-id?loginId=chozy123`, POST `/auth/reissue`는 Access 없이 호출합니다. 재발급/로그아웃 body는 `{ "refreshToken": "발급받은 토큰" }`입니다. 재발급 후 새 Refresh를 저장해야 하며 기존 Refresh는 재사용할 수 없습니다. 요청·응답 상세는 references 원본 및 Swagger를 따릅니다.
+첫 실행에 개발 JWT 키가 없다면 32바이트 난수 키를 생성해 개발용 비밀 저장소에서 관리합니다.
+
+1. Swagger의 `POST /auth/signup`과 `POST /auth/login`에서 **Try it out → Execute**를 실행합니다. 사용 중인 개발 계정이 있으면 가입을 생략합니다.
+2. 로그인 응답의 `data.accessToken` 값만 **Authorize → bearerAuth**에 입력합니다. Swagger가 `Authorization: Bearer <accessToken>` 헤더를 붙입니다.
+3. `GET /my/dashboard`나 `GET /home/report-usage`에서 **Try it out → Execute**를 실행합니다. 새로고침하면 Swagger 인증 입력은 유지되지 않습니다.
+4. `POST /auth/reissue`는 Access 헤더 없이 본문에 `refreshToken`을 보냅니다. 성공하면 새 Access와 Refresh를 저장하고 Swagger의 **Authorize** 값도 교체합니다. `POST /auth/logout`은 Access 헤더와 Refresh 본문을 모두 받습니다. 비밀번호 변경 성공 후에는 기존 토큰을 지우고 다시 로그인합니다.
+
+CORS는 `CORS_ALLOWED_ORIGINS`에 실제 프론트엔드 origin을 쉼표로 구분해 설정합니다. 스킴·호스트·포트가 정확히 일치해야 하므로 `localhost`와 `127.0.0.1`을 각각 사용한다면 별도로 등록합니다. `Authorization`, `Content-Type`, `Accept` 헤더를 허용하며 쿠키 자격 증명은 사용하지 않습니다. 운영 프로필의 Swagger 기본값은 비활성입니다.
 
 가입 예시:
 
@@ -178,6 +188,8 @@ Swagger: http://localhost:8080/swagger-ui/index.html . POST `/auth/signup` → P
 ```
 
 일반 가입은 본인인증 없는 임시 개발 경로입니다. dbdev만 기본 허용하고 database는 기본 차단, prod는 설정을 켜도 서버에서 차단합니다. 본인인증/DI·카카오·네이버 로그인은 미구현입니다. 로그아웃은 Refresh를 폐기하며 기존 Access는 잔여 만료 시간까지 유효합니다. 정책·미확정 계약·V3 저장 구조는 [BACKEND](docs/BACKEND.md#2단계-일반-계정-인증-구현)를 참고합니다.
+
+`PATCH /my/password` 변경 성공 후에는 기존 Access와 Refresh 모두 차단됩니다. 홈·마이페이지의 무료 정밀분석 한도는 `FREE_MONTHLY_REPORT_LIMIT`에서 설정하며 기본값은 3입니다. 자세한 저장·집계 정책은 [BACKEND](docs/BACKEND.md#3단계-마이페이지와-무료-정밀분석-사용량)를 참고합니다.
 
 ```powershell
 # DB 없이 기동·공통/JWT 회귀

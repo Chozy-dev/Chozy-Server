@@ -24,10 +24,14 @@ public final class JwtTokens {
   }
   public long accessSeconds() { return accessSeconds; }
   public String issue(long memberId, String type) {
+    return issue(memberId, type, 0);
+  }
+  public String issue(long memberId, String type, long credentialVersion) {
     try {
       Instant now = clock.instant().truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
       var claims = new JWTClaimsSet.Builder().issuer("chozy").subject(Long.toString(memberId))
-          .jwtID(UUID.randomUUID().toString()).claim("type", type).issueTime(Date.from(now))
+          .jwtID(UUID.randomUUID().toString()).claim("type", type)
+          .claim("credentialVersion", credentialVersion).issueTime(Date.from(now))
           .expirationTime(Date.from(now.plusSeconds(type.equals("access") ? accessSeconds : refreshSeconds))).build();
       var jwt = new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.HS256).type(JOSEObjectType.JWT).build(), claims);
       jwt.sign(new MACSigner(key));
@@ -47,12 +51,19 @@ public final class JwtTokens {
           || c.getIssueTime().toInstant().isAfter(now)
           || !c.getExpirationTime().after(c.getIssueTime())) throw new IllegalArgumentException();
       long id = Long.parseLong(c.getSubject());
-      if (id <= 0) throw new IllegalArgumentException();
+      // Stage 2 tokens predate this claim and belong to credential version zero.
+      Object claim = c.getClaim("credentialVersion");
+      long credentialVersion = 0;
+      if (c.getClaims().containsKey("credentialVersion")) {
+        if (!(claim instanceof Long || claim instanceof Integer)) throw new IllegalArgumentException();
+        credentialVersion = ((Number) claim).longValue();
+      }
+      if (id <= 0 || credentialVersion < 0) throw new IllegalArgumentException();
       if (!c.getExpirationTime().toInstant().isAfter(now))
         throw new BusinessException(expectedType.equals("access") ? ErrorCode.ACCESS_TOKEN_EXPIRED : ErrorCode.REFRESH_TOKEN_EXPIRED);
-      return new Verified(id, c.getExpirationTime().toInstant());
+      return new Verified(id, c.getExpirationTime().toInstant(), credentialVersion);
     } catch (BusinessException ex) { throw ex; }
     catch (Exception ex) { throw new BusinessException(ErrorCode.INVALID_AUTHENTICATION); }
   }
-  public record Verified(long memberId, Instant expiresAt) {}
+  public record Verified(long memberId, Instant expiresAt, long credentialVersion) {}
 }

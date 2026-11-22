@@ -6,7 +6,9 @@ import com.chozy.server.auth.entity.RefreshToken;
 import com.chozy.server.auth.repository.RefreshTokenRepository;
 import com.chozy.server.member.entity.Member;
 import com.chozy.server.member.repository.MemberRepository;
+import com.chozy.server.member.service.MemberAccess;
 import com.chozy.server.common.error.*;
+import com.chozy.server.common.security.AuthenticatedMember;
 import com.chozy.server.common.security.JwtTokens;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
@@ -25,17 +27,19 @@ public class AuthService {
   private final PasswordEncoder encoder;
   private final JwtTokens jwt;
   private final SignupPolicy policy;
+  private final MemberAccess memberAccess;
   private final String dummyHash;
   public AuthService(MemberRepository members, RefreshTokenRepository refreshTokens,
-      PasswordEncoder encoder, JwtTokens jwt, SignupPolicy policy) {
+      PasswordEncoder encoder, JwtTokens jwt, SignupPolicy policy, MemberAccess memberAccess) {
     this.members = members; this.refreshTokens = refreshTokens; this.encoder = encoder;
     this.jwt = jwt; this.policy = policy;
+    this.memberAccess = memberAccess;
     dummyHash = encoder.encode(java.util.UUID.randomUUID().toString());
   }
   @Transactional
   public SignupResult signup(Signup request) {
     policy.requireAllowed();
-    if (request.password().getBytes(StandardCharsets.UTF_8).length > 72)
+    if (!PasswordPolicy.fitsBcrypt(request.password()))
       throw new BusinessException(ErrorCode.INVALID_INPUT);
     if (members.existsByLoginId(request.loginId()) || members.existsByEmail(request.email()))
       throw new BusinessException(ErrorCode.DUPLICATE);
@@ -53,33 +57,39 @@ public class AuthService {
   }
   @Transactional
   public LoginResult login(Login request) {
-    var member = members.findByLoginId(request.loginId());
-    boolean matches = request.password().getBytes(StandardCharsets.UTF_8).length <= 72
+    var member = members.lockByLoginId(request.loginId());
+    boolean matches = PasswordPolicy.fitsBcrypt(request.password())
         && encoder.matches(request.password(), member.map(Member::getPasswordHash).orElse(dummyHash));
     if (member.isEmpty() || !matches) throw invalid();
     var m = member.orElseThrow();
-    Tokens tokens = issue(m.getId());
+    Tokens tokens = issue(m);
     return new LoginResult(m.getId(), m.getNickname(), tokens.accessToken(), tokens.refreshToken(), "Bearer", tokens.expiresIn());
   }
   @Transactional
   public Tokens reissue(String raw) {
     var verified = jwt.verify(raw, "refresh");
+    var member = memberAccess.lockCurrent(new AuthenticatedMember(
+        verified.memberId(), verified.credentialVersion()));
     var stored = refreshTokens.lockByHash(hash(raw)).orElseThrow(AuthService::invalid);
-    if (stored.getMemberId() != verified.memberId() || !stored.usable(Instant.now())
-        || !members.existsById(verified.memberId())) throw invalid();
+    if (stored.getMemberId() != member.getId() || !stored.usable(Instant.now())) throw invalid();
     stored.revoke();
-    return issue(verified.memberId());
+    return issue(member);
   }
   @Transactional
-  public void logout(long memberId, String raw) {
+  public void logout(AuthenticatedMember principal, String raw) {
     var verified = jwt.verify(raw, "refresh");
-    if (verified.memberId() != memberId) throw new BusinessException(ErrorCode.FORBIDDEN);
+    if (verified.memberId() != principal.memberId()) throw new BusinessException(ErrorCode.FORBIDDEN);
+    memberAccess.lockCurrent(principal);
+    if (verified.credentialVersion() != principal.credentialVersion()) throw invalid();
     var stored = refreshTokens.lockByHash(hash(raw)).orElseThrow(AuthService::invalid);
-    if (stored.getMemberId() != memberId || !stored.usable(Instant.now())) throw invalid();
+    if (stored.getMemberId() != principal.memberId() || !stored.usable(Instant.now())) throw invalid();
     stored.revoke();
   }
-  private Tokens issue(long id) {
-    String access = jwt.issue(id, "access"), refresh = jwt.issue(id, "refresh");
+  private Tokens issue(Member member) {
+    long id = member.getId();
+    long version = member.getCredentialVersion();
+    String access = jwt.issue(id, "access", version);
+    String refresh = jwt.issue(id, "refresh", version);
     refreshTokens.save(new RefreshToken(id, hash(refresh), jwt.verify(refresh, "refresh").expiresAt()));
     return new Tokens(access, refresh, "Bearer", jwt.accessSeconds());
   }
