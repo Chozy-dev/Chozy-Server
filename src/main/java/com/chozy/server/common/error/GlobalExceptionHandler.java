@@ -23,6 +23,17 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
   private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+  @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+  ResponseEntity<Object> integrity(org.springframework.dao.DataIntegrityViolationException ex) {
+    Throwable cause = ex;
+    while (cause != null) {
+      if (cause instanceof java.sql.SQLException sql && "23505".equals(sql.getSQLState()))
+        return response(ErrorCode.DUPLICATE);
+      cause = cause.getCause();
+    }
+    return response(ErrorCode.INTERNAL_ERROR);
+  }
+
   @ExceptionHandler(BusinessException.class)
   ResponseEntity<Object> business(BusinessException ex) {
     return response(ex.errorCode());

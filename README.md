@@ -2,7 +2,7 @@
 
 위탁 셀러의 상품 소싱 검증 서비스 Chozy의 Spring Boot 백엔드입니다. 프론트엔드 REST API와 사용자 기능을 담당하며, 상품 수집·공급 점수 계산·정기 추천 발행은 별도 Python Collector가 담당합니다.
 
-현재는 **API 공통 기반과 격리 개발 DB·Migration·최소 회원 저장 구조**까지 구현했습니다. 회원가입·로그인·JWT 검증과 개별 업무 API는 아직 구현하지 않았습니다. 기본 실행과 테스트에는 PostgreSQL이나 외부 API가 필요하지 않습니다.
+현재는 **공통 기반·격리 개발 DB와 일반 회원가입·로그인·JWT 인증·토큰 재발급·로그아웃**까지 구현했습니다. 본인인증·소셜 로그인과 개별 업무 API는 미구현입니다. 기본 실행과 테스트에는 PostgreSQL이나 외부 API가 필요하지 않습니다.
 
 ## 기술 환경
 
@@ -34,7 +34,7 @@ macOS/Linux에서는 `./mvnw`를 사용합니다. 실행 권한이 없으면 `sh
 - OpenAPI JSON: [http://localhost:8080/v3/api-docs](http://localhost:8080/v3/api-docs)
 - 종료: 실행 터미널에서 `Ctrl+C`
 
-현재 업무 엔드포인트는 없으므로 Swagger의 업무 경로는 비어 있습니다. `/`와 업무 경로에 비인증으로 요청하면 `401/A004`가 반환됩니다. 이는 기본 접근 제한이 적용된 결과입니다.
+`dbdev` Swagger에는 5개 인증 API가 표시됩니다. `offline/dev`는 DB 없는 공통 기반 실행용이며 인증 API는 등록하지 않습니다. `/`와 업무 경로에 비인증으로 요청하면 `401/A004`가 반환됩니다. 이는 기본 접근 제한이 적용된 결과입니다.
 
 빌드한 JAR를 실행하려면:
 
@@ -147,3 +147,41 @@ Chozy_Server/
 - [Collector 현재 상태](../product-data-collector/docs/CONTEXT.md): 수집·발행 시스템의 현재 구현 및 운영 미완료 항목
 
 작업 결과는 프로젝트 최상위 `temp.md`에 기록하며 Git에서 제외합니다. 매번 기존 내용을 전부 지우고 최신 작업 결과로 파일 전체를 덮어씁니다. 이전 결과에 이어 쓰거나 이력을 누적하지 않습니다. 지속해서 유지할 사용법은 README, 설계 규칙은 BACKEND 문서에서 관리합니다.
+
+
+## JWT 인증 API 실행
+
+기존 개발 DB 실행 명령을 사용하고 인증 API는 `dbdev`로 실행합니다. 이미 실행 중인 Compose/volume을 재사용하며 초기화하지 않습니다. DB 프로필에는 별도로 JWT 키가 필수입니다. 키를 바꾸면 기존 토큰은 검증되지 않으므로 재시작 시 동일 키를 안전하게 주입합니다.
+
+```powershell
+# 첫 개발 키 생성: 값을 비밀 저장소/IDE 환경변수에 보관하고 재사용
+$env:JWT_SECRET_BASE64=[Convert]::ToBase64String([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+$env:JWT_ACCESS_SECONDS='3600'
+$env:JWT_REFRESH_SECONDS='1209600'
+$env:CHOZY_DEV_DB_PASSWORD='<기존 개발 DB 비밀번호>'
+.\mvnw.cmd spring-boot:run '-Dspring-boot.run.profiles=dbdev'
+```
+
+Swagger: http://localhost:8080/swagger-ui/index.html . POST `/auth/signup` → POST `/auth/login` → 반환 Access로 Authorize → POST `/auth/logout` 흐름으로 확인합니다. GET `/auth/check-login-id?loginId=chozy123`, POST `/auth/reissue`는 Access 없이 호출합니다. 재발급/로그아웃 body는 `{ "refreshToken": "발급받은 토큰" }`입니다. 재발급 후 새 Refresh를 저장해야 하며 기존 Refresh는 재사용할 수 없습니다. 요청·응답 상세는 references 원본 및 Swagger를 따릅니다.
+
+가입 예시:
+
+```json
+{
+  "loginId": "chozy123",
+  "password": "ExamplePassword123!",
+  "nickname": "초보셀러",
+  "email": "chozy123@example.com",
+  "termsAgreed": true,
+  "privacyAgreed": true
+}
+```
+
+일반 가입은 본인인증 없는 임시 개발 경로입니다. dbdev만 기본 허용하고 database는 기본 차단, prod는 설정을 켜도 서버에서 차단합니다. 본인인증/DI·카카오·네이버 로그인은 미구현입니다. 로그아웃은 Refresh를 폐기하며 기존 Access는 잔여 만료 시간까지 유효합니다. 정책·미확정 계약·V3 저장 구조는 [BACKEND](docs/BACKEND.md#2단계-일반-계정-인증-구현)를 참고합니다.
+
+```powershell
+# DB 없이 기동·공통/JWT 회귀
+.\mvnw.cmd -B verify
+# Docker 필요: 기존 DB와 독립된 Testcontainers PostgreSQL에서 인증/동시성/DB 재시작 검증
+.\mvnw.cmd -B -Pdb-test verify
+```

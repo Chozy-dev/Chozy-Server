@@ -39,6 +39,7 @@ class MemberDatabaseIT {
     props.add("spring.datasource.username", DB::getUsername);
     props.add("spring.datasource.password", DB::getPassword);
     props.add("spring.flyway.enabled", () -> false);
+    props.add("JWT_SECRET_BASE64", () -> java.util.Base64.getEncoder().encodeToString(new byte[32]));
   }
 
   @Autowired MemberRepository members;
@@ -70,7 +71,7 @@ class MemberDatabaseIT {
     try (Connection c = connection(); Statement s = c.createStatement()) {
       var rows = s.executeQuery("SELECT count(*) FROM chozy.flyway_schema_history WHERE version IS NOT NULL AND success");
       rows.next();
-      assertThat(rows.getInt(1)).isEqualTo(2);
+      assertThat(rows.getInt(1)).isEqualTo(3);
       var collectorHistory = s.executeQuery("SELECT to_regclass('public.schema_migrations') IS NULL");
       collectorHistory.next();
       assertThat(collectorHistory.getBoolean(1)).isTrue();

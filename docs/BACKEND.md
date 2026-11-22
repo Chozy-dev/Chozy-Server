@@ -6,7 +6,7 @@
 
 설정은 `application.yml`을 공통값으로, `application-{profile}.yml`을 환경 차이로 관리한다. 비밀값은 환경변수로 주입하며 `.env` 자동 로드를 가정하지 않는다. 기본/일반 테스트 환경은 DB 없이 실행한다. DB 접속은 격리 개발용 `dbdev` 또는 별도 검토한 `database/prod`에서 활성화한다.
 
-기본 `ddl-auto=none`, DB 프로필은 `validate`, SQL init은 never다. Hibernate는 테이블을 생성하지 않는다. Flyway 의존성은 도입했으며 `dbdev`에서만 startup migration을 허용한다. `database/prod`는 disabled이고 외부 설정으로 켜도 연결 전 안전 검증에서 거부한다. Actuator·JWT 라이브러리는 실제 구현 단계에 추가한다.
+기본 `ddl-auto=none`, DB 프로필은 `validate`, SQL init은 never다. Hibernate는 테이블을 생성하지 않는다. Flyway 의존성은 도입했으며 `dbdev`에서만 startup migration을 허용한다. `database/prod`는 disabled이고 외부 설정으로 켜도 연결 전 안전 검증에서 거부한다. JWT는 Spring Security OAuth2 JOSE의 Nimbus 구현을 사용한다. Actuator는 미도입이다.
 
 CORS는 `CORS_ALLOWED_ORIGINS`에 정확한 HTTP(S) origin을 쉼표로 설정한다. 기본은 빈 목록, wildcard·경로·사용자정보는 거부한다. Bearer 헤더 방식의 Stateless 구성을 전제로 credentials는 false이고 CSRF/form login/basic login/session/request cache를 사용하지 않는다. 쿠키 인증을 도입하면 CSRF·CORS 정책을 다시 검토한다. SQL/바인딩 로그는 제한하고 요청 본문·Authorization·예외 원문을 로깅하지 않는다.
 
@@ -29,7 +29,7 @@ CORS는 `CORS_ALLOWED_ORIGINS`에 정확한 HTTP(S) origin을 쉼표로 설정�
 | integration.external | 사용자 요청 시 네이버·쿠팡 등 호출과 공동 예산 연계 |
 | integration.ai | 계약 확정 후 필요한 AI 연동 |
 | common.response/error | HTTP envelope·예외 및 코드 |
-| common.security/config | 접근 정책·향후 JWT 필터·CORS·OpenAPI |
+| common.security/config | 접근 정책·JWT 필터·CORS·OpenAPI |
 
 `기능.controller → 기능.service → 기능.repository` 방향을 따른다. Controller는 HTTP/검증/DTO 변환, Service는 유스케이스·트랜잭션·사용자 권한, Repository는 저장/조회만 담당한다. 자체 데이터에는 JPA, Collector 발행 조회에는 JDBC를 우선 사용한다. 각 기능에 필요한 경우에만 dto/entity 등의 하위 패키지를 만든다. 전역 controller/service/repository, BaseService, 형식적 인터페이스는 추가하지 않는다.
 
@@ -41,7 +41,7 @@ DTO는 API 입력·출력 계약이며 Entity를 그대로 반환하거나 요�
 
 오류는 기존 명세 예시의 `message/status/errors/code`를 사용한다. C001~C012, A003~A006은 원문 표의 상태/메시지와 같다. Bean Validation C001, 타입 C005, 누락 파라미터 C008, JSON C009, 메서드 C007, 미디어 C010, 경로 부재 C003, 업무 충돌 C002, 권한 C006, 예상 밖 오류 C004를 공통 처리한다. C011 업로드/C012 비동기 기반 매핑도 제공한다. 오류 응답에 내부 메시지·SQL·stack trace·입력값을 넣지 않는다. 예기치 않은 예외 로그는 타입만 남긴다.
 
-아직 업무 API 공개 규칙은 등록하지 않았다. 기본은 모든 요청 인증 필수이며 JWT 발급/검증과 임시 인증 성공은 없다. JWT를 구현할 때 `common.security`에 검증 필터/인증 주체를 추가하고, 검증된 인증 결과만 SecurityContext에 저장한다. 업무 Service에서도 리포트/관심상품 소유권을 검증해야 한다. OpenAPI bearerAuth 정의는 문서 표기일 뿐 실제 인증 기능이 아니다. 인증 필수 API에만 `@SecurityRequirement(name="bearerAuth")`를 추가한다.
+인증 공개 경로 4개만 method/path로 허용하며 다른 업무 경로는 기본 인증 필수다. `common.security.JwtAuthenticationFilter`가 Bearer Access Token을 검증해 `AuthenticatedMember(memberId)`를 SecurityContext에 저장한다. 다른 도메인은 `@AuthenticationPrincipal AuthenticatedMember`로 회원 ID를 얻고 Service에서 자원 소유권을 검증한다. 잘못된 Authorization은 공개 API에서도 무시하지 않고 오류를 반환한다. OpenAPI의 bearerAuth는 로그아웃에 적용했다. offline/dev에는 DB 의존 auth Controller·Service·JWT 발급 빈을 생성하지 않으며 DB나 외부 API 없이 기동한다.
 
 API를 구현할 때 **HTTP 메서드 + 정확한 경로**를 SecurityConfiguration에 등록한다. `/auth/**`, `/home/**`, `/search/**` 전체 공개는 금지한다. 현재 명세 분류:
 
@@ -59,7 +59,7 @@ Collector의 `products/product_options/product_history/product_events`는 최신
 
 쿠팡은 `coupang_API/persistence/best.py:read_published`, 네이버는 `naver_API/queries.py:read_published/read_compare`가 실제 조회 계약이다. Python 함수는 Spring에서 직접 호출할 HTTP 서버가 아니다. 향후 해당 SQL 의미를 JDBC로 구현하고 필요한 읽기 권한을 별도 확인한다. 한 SQL로 최신 완료 배치 전체를 고르고 선택 카테고리/테마가 없다고 과거 데이터를 섞지 않는다. 비교는 네이버와 같은 날짜의 완료 쿠팡만 사용한다. 현재 쿠팡/네이버 Spring runtime 권한은 확정되지 않았다.
 
-Spring 사용자/인증/리포트/관심상품/알림/사용량 데이터는 `chozy` 소유다. 현재는 최소 `members`만 구현했다. `db/migration/chozy`와 `chozy.flyway_schema_history`는 Collector Python migration/ledger와 독립적이다. 운영에서는 전용 migration 관리자와 비소유 Spring runtime 로그인을 구분하며 runtime에는 DDL 권한을 주지 않는다. 운영 Flyway 적용은 별도 검증·승인 작업이며 애플리케이션 startup에서는 disabled다. 필요 시 자체 저장과 Collector 조회에 별도 DataSource/계정을 둔다. Collector 관리자 계정을 재사용하지 않는다.
+Spring 사용자/인증/리포트/관심상품/알림/사용량 데이터는 `chozy` 소유다. `members`와 `refresh_tokens`를 구현했다. `db/migration/chozy`와 `chozy.flyway_schema_history`는 Collector Python migration/ledger와 독립적이다. 운영에서는 전용 migration 관리자와 비소유 Spring runtime 로그인을 구분하며 runtime에는 DDL 권한을 주지 않는다. 운영 Flyway 적용은 별도 검증·승인 작업이며 애플리케이션 startup에서는 disabled다. 필요 시 자체 저장과 Collector 조회에 별도 DataSource/계정을 둔다. Collector 관리자 계정을 재사용하지 않는다.
 
 **2026-11-22 문서 기준** 운영에는 stage7_supply_scoring, stage8_operations, stage7_history_policy_v2, stage10_scoring_performance 네 migration이 미적용이다. runtime_budget_guard·runtime 권한 분리·실제 Spring 로그인/DSN 전환도 미완료다. 사본 권한 검증은 운영 적용 완료가 아니다. read_supply_home/reserve_api_call의 원본은 INVOKER이고 access.py의 DEFINER/고정 search_path 권한 계획은 운영 미적용이다. EXECUTE만 부여하면 충분하다고 가정하거나 관리자 계정으로 우회하지 않는다. 1,500만 성능·용량과 지속 수집 SLA도 미검증이다.
 
@@ -83,11 +83,11 @@ Flyway core와 PostgreSQL 모듈은 Boot BOM 버전을 사용한다. `V1__create
 
 ### 최소 회원 데이터와 중복 정책
 
-`chozy.members`는 API의 숫자 userId에 대응하는 bigint identity PK, login_id, password_hash, nickname, email, 필수 약관/개인정보 동의 시각, 생성/수정 시각, nullable verified_di_hash/di_verified_at을 갖는다. password_hash에는 향후 PasswordEncoder 결과만 저장한다. 원문 비밀번호·전화번호·원본 DI는 저장하지 않는다. updated_at 갱신은 향후 수정 유스케이스가 담당하며 자동 DB trigger는 없다. 약관 버전·탈퇴/재가입·보관 정책은 인증 구현 전에 확정한다.
+`chozy.members`는 API의 숫자 userId에 대응하는 bigint identity PK, login_id, password_hash, nickname, email, 필수 약관/개인정보 동의 시각, 생성/수정 시각, nullable verified_di_hash/di_verified_at을 갖는다. password_hash에는 PasswordEncoder 결과만 저장한다. 원문 비밀번호·전화번호·원본 DI는 저장하지 않는다. updated_at 갱신은 향후 수정 유스케이스가 담당하며 자동 DB trigger는 없다. 약관 버전·탈퇴/재가입·보관 정책은 운영 전 확정해야 한다.
 
 - loginId: 앞뒤 Unicode 공백 제거 후 Locale.ROOT 소문자화. 저장값은 ASCII `[a-z0-9][a-z0-9_.-]{0,99}`로 제한한다. 정규화된 값에 Unique 제약을 두며 비정규 저장은 CHECK로 거부한다. 이는 이번 DB 정책이며 원본 명세에는 길이/문자/대소문자 정책이 없으므로 2단계 API 검증과 UI 계약을 맞춘다.
-- email: 앞뒤 공백 제거 후 전체 주소 소문자화, 내부 공백 불허. DB는 소문자 canonical 값·최소 @ 구조와 Unique를 강제한다. 정규 형식의 완전한 검증은 향후 DTO에서 수행한다. 로컬 파트도 대소문자를 구분하지 않는 서비스 정책이며 공급자별 점 제거·plus alias 병합은 하지 않는다. 수정 시에도 같은 정책과 Unique를 적용한다. 국제화 주소 지원 범위는 후속 확정한다.
-- 사전 중복 확인 API는 사용자 안내용이다. 동시 가입의 최종 판정은 DB Unique다. 향후 서비스는 제약 위반 트랜잭션을 rollback하고 확정된 오류 계약으로 변환해야 한다.
+- email: 앞뒤 공백 제거 후 전체 주소 소문자화, 내부 공백 불허. DB는 소문자 canonical 값·최소 @ 구조와 Unique를 강제한다. API의 @Email DTO 검증과 함께 적용한다. 로컬 파트도 대소문자를 구분하지 않는 서비스 정책이며 공급자별 점 제거·plus alias 병합은 하지 않는다. 수정 시에도 같은 정책과 Unique를 적용한다. 국제화 주소 지원 범위는 후속 확정한다.
+- 사전 중복 확인 API는 사용자 안내용이다. 동시 가입의 최종 판정은 DB Unique다. 서비스의 제약 위반 트랜잭션은 rollback하며 Unique 충돌은 C002로 변환한다.
 - DI: 미인증 회원의 두 필드는 모두 NULL이다. 두 필드가 함께 있을 때만 허용하고 verified_di_hash에는 Unique를 적용한다(NULL 여러 개 허용). 컬럼은 32~128자의 URL-safe 문자열을 임시 저장 계약으로 예약했으며 해시 알고리즘을 확정한 것이 아니다. DB는 인증 진위를 판정할 수 없다. 신뢰한 업체 검증 결과만 서버 내부에서 기록해야 하며 현재 Entity에는 DI 입력 경로가 없다. 통합 테스트의 합성 문자열은 폐기되는 테스트 DB의 제약 fixture일 뿐 개발 DB에 인증 회원을 만들지 않는다.
 - 본인인증이 없으면 서로 다른 아이디와 이메일을 쓰는 동일인의 중복 가입까지 막을 수 없다. Unique 제약과 실제 본인인증은 별개이며 전화번호 일치만으로 동일인이나 DI로 취급하지 않는다.
 
@@ -95,24 +95,24 @@ Entity는 `member.entity`, Repository는 `member.repository`에 최소한만 두
 
 ### 미구현 인증과 원본 차이
 
-기획서 2.1(인쇄 4쪽)은 휴대폰 본인인증 필수·DI 해시 기반 1인 1계정과 소셜 첫 로그인에서도 인증을 요구한다. 반면 회원가입 API 원본은 loginId/password/nickname/email/termsAgreed/privacyAgreed만 받으며 인증 결과 계약이 없다. 기획서는 소셜 가입 시 아이디·비밀번호가 없다고 명시하지만 현재 테이블은 로컬 계정용 필수 컬럼이다. 소셜 구현 시 credential 분리 또는 nullable 정책 migration을 검토해야 한다. 원본 자료를 임의 변경하지 않고 가입 구현 전에 계약을 조정한다.
+기획서 2.1(인쇄 4쪽)은 휴대폰 본인인증 필수·DI 해시 기반 1인 1계정과 소셜 첫 로그인에서도 인증을 요구한다. 반면 회원가입 API 원본은 loginId/password/nickname/email/termsAgreed/privacyAgreed만 받으며 인증 결과 계약이 없다. 기획서는 소셜 가입 시 아이디·비밀번호가 없다고 명시하지만 현재 테이블은 로컬 계정용 필수 컬럼이다. 소셜 구현 시 credential 분리 또는 nullable 정책 migration을 검토해야 한다. 원본 자료는 보존하고 이번 단계는 아래 개발용 임시 가입 정책을 적용한다. 운영 가입은 본인인증 계약 보완 후 구현한다.
 
 1. 휴대폰 본인인증 API 연동·DI 발급/검증은 미구현이다. 업체 선정, 실제 DI 응답 필드·사이트 범위·재사용/만료/서명 검증 계약을 확인해야 한다.
 2. 원본 DI를 저장하지 않는 키 기반 해시(HMAC 등), key 보관/버전/회전, canonical 인코딩을 검토하고 업체 선정 후 확정한다. 임시 해시를 생성해 인증값으로 사용하는 경로는 없다.
 3. 동일 DI의 1인 1계정 보장과 기존 회원 연계/충돌/탈퇴 후 재가입 정책을 정해야 한다. 가입 요청의 미검증 DI를 신뢰하거나 아이디 중복 검사만으로 1인 1계정을 보장했다고 처리하지 않는다.
 4. 카카오·네이버 로그인과 기존 계정 연결은 미구현이다. 후속 외부 계정 테이블에는 `(provider, provider_user_id)` Unique가 필요하다. 동일 DI로 검증된 회원은 별도 계정 생성보다 기존 회원 연결을 우선 검토하되 본인 확인과 계정 탈취 방지 정책을 확정한다. 이메일/전화번호 일치만으로 자동 연결하지 않는다.
-5. 실제 회원가입·로그인 API, JWT 발급/검증, Refresh Token 저장/재발급, 이메일 인증·외부 인증 서비스는 전부 미구현이다. 기획서에서는 이메일 인증을 삭제하고 알림용 필수 입력으로 변경했으므로 이메일 인증 도입 여부도 별도 결정한다.
+5. 일반 회원가입·로그인·JWT·Refresh Token 저장/재발급·로그아웃은 2단계에서 구현했다. 이메일 인증·외부 인증 서비스는 미구현이다. 기획서에서는 이메일 인증을 삭제하고 알림용 필수 입력으로 변경했으므로 이메일 인증 도입 여부도 별도 결정한다.
 
 ### 검증 원칙
 
-기본 Maven verify는 기존 18개 회귀와 DB 설정 안전 검증을 DB 없이 실행한다. `-Pdb-test verify`는 Testcontainers가 생성한 PostgreSQL 16 URL만 사용하고 Flyway를 적용한 뒤 JPA validate·저장/조회를 확인한다. 운영/개발 DB URL은 테스트 입력으로 받지 않는다. Unique/동시 요청·이메일 canonical CHECK·nullable DI와 합성 DI Unique·중복 실패 후 전체 rollback 및 연결 복구·Migration 재실행을 검증한다. 테스트 데이터는 폐기 컨테이너에만 저장하고 실제 개발 DB를 truncate/clean하지 않는다. Docker가 없을 때 성공으로 건너뛰지 않는다.
+기본 Maven verify는 공통 회귀·DB 설정 안전 검증·JWT·가입 정책을 DB 없이 실행한다. `-Pdb-test verify`는 Testcontainers가 생성한 PostgreSQL 16 URL만 사용하고 Flyway를 적용한 뒤 JPA validate·저장/조회를 확인한다. 운영/개발 DB URL은 테스트 입력으로 받지 않는다. Unique/동시 요청·이메일 canonical CHECK·nullable DI와 합성 DI Unique·중복 실패 후 전체 rollback 및 연결 복구·Migration 재실행을 검증한다. 테스트 데이터는 폐기 컨테이너에만 저장하고 실제 개발 DB를 truncate/clean하지 않는다. Docker가 없을 때 성공으로 건너뛰지 않는다.
 
 ## 자료 차이와 미확정 사항
 
 - 서버 참고 자료는 PDF 1개와 Markdown 41개(실제 URL이 있는 API 39개, 템플릿 2개)다. 공통/인증 에러 표는 서버 참고 폴더에 없어 Collector `docs/references/API 명세서/에러 코드` 원본을 읽었다. 원본 자료는 수정하지 않았다.
 - 오류 envelope는 빈 템플릿의 A007 예시에만 명시되어 있다. errors 항목의 세부 필드/값은 정의되지 않아 빈 배열로 유지한다. 새 traceId/timestamp/path 필드를 만들지 않았다. A007은 코드 표에 없어 등록하지 않았다.
-- 토큰 미제공에 대한 별도 에러 코드가 없어 현재 인증 진입 실패는 A004를 사용한다. JWT 구현 전에 누락/만료/서명 실패 정책과 406 등 표에 없는 HTTP 오류의 코드 정책을 확정한다. 현재 미분류 MVC 오류는 C004로 안전하게 처리한다.
-- 기획서의 휴대폰 본인인증 필수/DI 해시 정책이 회원가입 DTO 명세에는 빠져 있다. 업체 계약·필드와 함께 가입 구현 전에 정합성을 맞춘다. 소셜 로그인/이메일 발송 계약도 미정이다.
+- 토큰 미제공에 대한 별도 에러 코드가 없어 현재 인증 진입 실패는 A004를 사용한다. Access 만료 A003, Refresh 만료 A005, 누락·서명/형식/유형 오류 A004를 적용한다. 406 등 표에 없는 HTTP 오류 정책은 추가 확정이 필요하다. 현재 미분류 MVC 오류는 C004로 안전하게 처리한다.
+- 기획서의 휴대폰 본인인증 필수/DI 해시 정책이 회원가입 DTO 명세에는 빠져 있다. 운영 가입 구현 전에 업체 계약·필드와 정합성을 맞춘다. 소셜 로그인/이메일 발송 계약도 미정이다.
 - 기획서의 과거 수집/호출 가정은 최신 Collector CONTEXT/DATABASE/API_CONTRACTS와 실제 코드의 운영 상태를 대체하지 않는다. 예: 도매매 Private 승인/지속 처리, 90일 coverage, 운영 권한 전환은 완료로 보지 않는다.
 
 ## 코드와 테스트 배치
@@ -128,3 +128,58 @@ Java는 UTF-8, 공백 2칸을 사용하며 Maven XML은 공백 4칸을 사용한
 다음 API는 원문 method/path/request/response/JWT부터 확인하고 해당 기능의 Controller·DTO·Service·필요한 Repository만 추가한다. 인증 규칙과 소유권, 실제 HTTP 상태/envelope 일치, 정상/검증/인증/권한 오류 테스트를 함께 작성한다. 자체 데이터 변경은 전용 migration으로 리뷰한다. 완료 발행 조회와 실시간 호출은 별도 통합 책임으로 유지한다. 구현하지 않은 API를 문서나 코드에 엔드포인트로 등록하지 않는다.
 
 버전 근거: [Spring Boot 3.5 공식 문서](https://docs.spring.io/spring-boot/3.5/), [springdoc 호환성 안내](https://springdoc.org/v2/), Maven Central의 실제 배포 artifact 확인. Boot 3.x 요구를 유지했으며 배포 전 해당 계열 지원 정책과 보안 패치를 재검토한다.
+
+
+## 2단계 일반 계정 인증 구현
+
+### API와 패키지
+
+| Method / Endpoint | 성공 상태 | data |
+| --- | --- | --- |
+| POST `/auth/signup` | 201 | userId, loginId, nickname, email, createdAt |
+| GET `/auth/check-login-id?loginId=...` | 200 | loginId, available |
+| POST `/auth/login` | 200 | userId, nickname, accessToken, refreshToken, tokenType, expiresIn |
+| POST `/auth/reissue` | 200 | accessToken, refreshToken, tokenType, expiresIn |
+| POST `/auth/logout` | 200 | null |
+
+요청 필드·성공 메시지는 references의 각 API 원본을 따른다. 가입은 6개 필수 필드, 로그인은 loginId/password, 재발급·로그아웃 body는 refreshToken이다. 로그아웃만 Access Bearer 인증 필수다. 응답은 공통 envelope를 유지하며 expiresIn은 Access 수명(초), tokenType은 Bearer다. createdAt은 UTC ISO-8601 Instant이며 명세 DateTime의 동일 시각을 표현한다.
+
+`auth/controller`는 HTTP/검증, `auth/dto`는 요청·응답, `auth/service`는 가입·로그인·Rotation·무효화와 트랜잭션, `auth/entity`와 `auth/repository`는 Refresh 저장을 담당한다. 회원 Entity/Repository는 기존 `member`에 유지했다. 공통 JWT 서명·검증/인증 주체/필터는 `common.security`, SQL Unique 충돌 변환은 `common.error`에 둔다.
+
+### 개발용 임시 가입 정책과 중복 방지 범위
+
+현재 회원가입은 **휴대폰 본인인증 없는 개발·테스트용 임시 경로**다. `app.auth.unverified-signup-enabled` 기본값은 false이며 dbdev 설정만 true다. 격리 테스트는 명시적으로 true를 주입한다. prod 프로필에서는 이 설정을 true로 덮어써도 Service가 C006/403으로 차단한다. database 프로필도 기본 차단한다. 운영 배포는 prod를 사용하며 일반 가입 스위치를 켜서 본인인증을 우회하지 않는다. 프론트엔드 숨김과 독립적으로 서버가 강제한다.
+
+본인인증 성공을 흉내 내거나 DI를 생성하지 않는다. 새 회원의 verified_di_hash/di_verified_at은 모두 NULL이다. loginId/email은 strip 후 Locale.ROOT 소문자로 정규화한다. 아이디는 기존 DB와 동일하게 `[a-z0-9][a-z0-9_.-]{0,99}`, 닉네임은 strip 후 1~100자, 이메일은 @Email 및 최대 320자를 검증한다. 비밀번호는 trim하지 않고 8자 이상·최대 72 UTF-8 바이트로 제한하며 BCrypt cost 12로 해시한다. login은 기존 비밀번호 검증을 위해 별도 최소 길이를 강제하지 않는다. 두 필수 동의는 null/false 모두 C001이다. 이 길이·문자 정책은 API 원문에 상세 제한이 없어 기존 DB와 BCrypt 한계를 바탕으로 정한 **서버 구현 정책이며 프론트 계약 보완 대상**이다.
+
+중복 확인은 가입 예약이 아니다. 가입은 트랜잭션 내 사전 조회 후 실제 saveAndFlush로 DB Unique 제약을 확인한다. 동시 요청의 최종 승자는 DB가 정하며 PostgreSQL 23505는 C002/409, 그 밖의 무결성 실패는 C004로 처리한다. 정규화된 아이디/이메일 중복은 방지하지만 서로 다른 아이디·이메일을 쓰는 동일인 중복 가입은 방지하지 못한다. 기존 검증된 DI 해시 Unique는 유지하며 **1인 1계정 구현 완료가 아니다.**
+
+### JWT와 Refresh 저장·수명
+
+HS256만 허용하며 환경변수 `JWT_SECRET_BASE64`에 CSPRNG로 생성한 32바이트 이상의 키를 Base64로 넣는다. DB 프로필은 키 미제공·잘못된 인코딩·짧은 키·0 이하 수명에 기동 실패한다. 개발/운영 기본 비밀키는 없다. 키·비밀번호·토큰 원문은 로그/오류 응답에 넣지 않고 민감 DTO의 toString도 감춘다.
+
+issuer=chozy, sub=회원 ID, type=access/refresh, 임의 UUID jti, iat/exp를 서명한다. 서명/알고리즘/issuer/유형/필수 claim/시각을 검증하며 시계 유예는 없다. `JWT_ACCESS_SECONDS` 기본 3600(1시간), `JWT_REFRESH_SECONDS` 기본 1209600(14일)이다. 운영은 TLS 및 시간 동기화가 필요하며 키 변경은 기존 토큰을 무효화한다. 키 버전/무중단 교체 정책은 후속 과제다. 외부 인증 서버·Redis는 도입하지 않았다.
+
+V1/V2는 변경하지 않았다. V3 `V3__create_refresh_tokens.sql`은 chozy.refresh_tokens(id, member_id FK, token_hash UNIQUE, expires_at, created_at, revoked_at)와 회원/만료 인덱스를 추가한다. 고엔트로피 서명 토큰의 SHA-256 해시만 저장하며 원문은 응답 시 전달한다. 로그인마다 별도 토큰을 생성해 복수 기기 로그인을 허용한다. 서버 재시작 후에도 같은 키와 DB로 검증한다.
+
+재발급은 Access 없이 Refresh의 서명·만료·유형 및 저장 해시/소유자/유효 상태를 확인한다. PESSIMISTIC_WRITE 행 잠금과 단일 트랜잭션으로 이전 토큰 revoke와 새 토큰 저장을 원자적으로 수행한다. 동시 재발급은 하나만 성공하며 이전 토큰 재사용은 A004다. 재사용 시 후속 토큰까지 자동 폐기하는 family 정책은 적용하지 않았다. 로그아웃은 Access 회원 ID와 Refresh 소유자를 대조한 뒤 같은 행 잠금으로 무효화한다. 타인 토큰은 C006이며 해당 토큰은 보존된다.
+
+로그아웃 후 Refresh 재발급은 차단하지만 **기존 Access는 남은 수명(기본 최대 1시간) 동안 유효**하다. Access 블랙리스트·즉시 폐기 기능은 없다. 만료/폐기 행은 감사·재사용 거부를 위해 보존하며 만료 인덱스로 정리 작업을 확장할 수 있다. 보존 기간/정기 삭제는 운영 전 확정한다. Repository의 revokeAllByMemberId는 향후 비밀번호 변경·탈퇴 시 전체 Refresh 무효화의 저장 기반이며 API는 없다. 실제 전체 폐기를 구현할 때 로그인/재발급도 회원 단위 잠금에 참여하도록 확장해야 한다. Access 즉시 차단에는 계정 상태/credential version 확인 또는 별도 폐기 정책이 필요하다.
+
+### 오류 계약 보완
+
+Access 만료=A003/401, Refresh 만료=A005/401, 위조·잘못된 형식·서명·유형·누락 인증=A004/401이다. 로그인 ID 부재와 비밀번호 불일치는 동일 A004 응답이며 부재 계정에도 dummy BCrypt 검증을 수행한다. Refresh 미등록/재사용/로그아웃 폐기도 인증 정보가 유효하지 않으므로 기존 의미에 맞는 A004를 사용한다. 중복=C002, 입력=C001, 타인 Refresh 및 운영 가입 차단=C006이다. A006은 SMS 코드 의미이므로 재사용하지 않았다. 원본에는 로그인 실패/Refresh 재사용/가입 차단 전용 코드가 없으며 **전용 코드를 확정한 것으로 취급하지 않는다.** 향후 프론트와 세부 코드 계약을 보완한다.
+
+### 미구현과 후속 연결
+
+- 휴대폰 본인인증 업체 선정, SMS 발송/검증, 실제 DI 검증·저장 API는 미구현이다. 업체의 실제 결과를 검증하고 안전하게 해시한 DI로 기존 회원을 조회해 중복 생성을 차단해야 한다. 검증된 DI 기반 1인 1계정은 이 연동 뒤 완성한다. 가입 API에 인증 결과 필드가 없는 기획/명세 차이를 해소해야 한다.
+- 기존 미인증 일반 계정의 연결·전환, DI 해시 키 관리/교체 및 탈퇴·재가입 보관 정책을 확정해야 한다.
+- 카카오·네이버 OAuth, 소셜 연결·해제는 미구현이다. 동일 DI 기반 계정 중복 방지와 기존 회원 연결 정책을 확정하며 이메일/전화번호 일치만으로 타인 소셜 계정을 자동 연결하지 않는다. 소셜 계정에는 비밀번호가 없으므로 password_hash NOT NULL 변경 또는 인증수단 분리 Migration이 필요하다. 이번에는 가짜 클래스·사전 소셜 테이블을 만들지 않았다.
+- 이메일 인증, 비밀번호 찾기/재설정, 회원탈퇴, 마이페이지 정보 수정·비밀번호 변경 API는 미구현이다. 비밀번호 변경 시 기존 Access/Refresh 무효화 및 탈퇴 상태 확인도 후속 구현이다. 필요 시 이메일 인증·재설정을 별도 확정한다.
+- 다음 단계는 프론트 인증 흐름 연결·명세 보완, 본인인증 계약 선정과 계정 전환 설계, 인증 주체를 사용하는 회원 소유 업무 API 구현이 적절하다. 운영 공개 전 요청 제한과 인증 시도 모니터링도 결정한다.
+
+### 검증 방식
+
+기본 verify는 offline 기동/기존 공통 회귀와 JWT 유형·위조·만료·키 및 가입 허용 정책을 DB 없이 검증한다. db-test는 기존 MemberDatabaseIT를 유지하고 AuthDatabaseIT에서 명세 응답·검증·정규화·해시·중복/동시 가입·로그인·Security 필터·Rotation/재사용/동시 재발급·소유권/로그아웃·Swagger를 검증한다. 테스트 전용 PostgreSQL 컨테이너를 실제 재시작한 뒤 저장 토큰의 재발급까지 검증한다. 개발 DB/회원 데이터를 삭제하거나 Collector DB에 접속하지 않는다. 테스트 컨테이너는 격리 통합 테스트용이며 개발 DB 컨테이너를 중복 생성하는 용도가 아니다.
+
+JWT 구현 참고: [Spring Security 공식 JWT 문서](https://docs.spring.io/spring-security/reference/servlet/oauth2/resource-server/jwt.html). 현재 구현은 직접 서명/검증 후 기존 공통 오류 응답과 통합한다.

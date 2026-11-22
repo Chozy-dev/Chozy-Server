@@ -11,3 +11,7 @@ spring:
       ddl-auto: validate
   flyway:
     enabled: true
+
+app:
+  auth:
+    unverified-signup-enabled: true

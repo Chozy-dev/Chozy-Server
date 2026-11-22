@@ -14,9 +14,12 @@ import org.springframework.web.cors.*;
 public class SecurityConfiguration {
   @Bean
   SecurityFilterChain securityFilterChain(
-      HttpSecurity http, SecurityProperties properties, SecurityErrorWriter errors)
+      HttpSecurity http, SecurityProperties properties, SecurityErrorWriter errors,
+      org.springframework.beans.factory.ObjectProvider<JwtTokens> tokens)
       throws Exception {
-    http.csrf(csrf -> csrf.disable())
+    http.addFilterBefore(new JwtAuthenticationFilter(tokens, errors),
+            org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class)
+        .csrf(csrf -> csrf.disable())
         .cors(cors -> cors.configurationSource(corsConfigurationSource(properties)))
         .sessionManagement(
             session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -38,8 +41,10 @@ public class SecurityConfiguration {
                 auth.requestMatchers(
                         "/v3/api-docs", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**")
                     .permitAll();
-              // Add method + exact path permissions only when the specified business API is
-              // implemented.
+              auth.requestMatchers(org.springframework.http.HttpMethod.POST,
+                      "/auth/signup", "/auth/login", "/auth/reissue").permitAll();
+              auth.requestMatchers(org.springframework.http.HttpMethod.GET,
+                      "/auth/check-login-id").permitAll();
               auth.anyRequest().authenticated();
             });
     return http.build();
