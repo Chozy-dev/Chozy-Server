@@ -2,6 +2,7 @@ package com.chozy.server.common.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.chozy.server.support.AccountPostgresITSupport;
@@ -11,6 +12,7 @@ import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 
 @TestPropertySource(properties = {
@@ -18,6 +20,19 @@ import org.springframework.test.context.TestPropertySource;
 })
 class OpenApiContractDatabaseIT extends AccountPostgresITSupport {
   private JsonNode spec;
+
+  @Test
+  void rejectsManualAnalysisWhenTheEngineIsAbsent() throws Exception {
+    var member = account();
+    mvc.perform(post("/search/analyses/manual").header("Authorization", member.bearer())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"productName":"Lantern","wholesalePrice":8000,"shippingFee":0,"hasPricePolicy":false}
+                """))
+        .andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.code").value("R003"));
+    assertThat(jdbc.sql("SELECT count(*) FROM chozy.manual_analysis_jobs WHERE member_id = :id")
+        .param("id", member.id()).query(Long.class).single()).isZero();
+  }
 
   @BeforeEach
   void loadOpenApi() throws Exception {
@@ -30,7 +45,8 @@ class OpenApiContractDatabaseIT extends AccountPostgresITSupport {
         "/auth/check-login-id", "get", "/auth/reissue", "post");
     var protectedPaths = Map.of("/auth/logout", "post", "/my/dashboard", "get",
         "/my/profile", "patch", "/my/password", "patch", "/my/marketing-consent", "patch",
-        "/home/report-usage", "get");
+        "/home/report-usage", "get", "/search/analyses/manual", "post",
+        "/search/analyses/{analysisId}/status", "get", "/search/reports/{reportId}", "get");
     var expectedPaths = new HashSet<>(publicPaths.keySet());
     expectedPaths.addAll(protectedPaths.keySet());
     assertThat(fields(spec.path("paths"))).isEqualTo(expectedPaths);
@@ -44,7 +60,12 @@ class OpenApiContractDatabaseIT extends AccountPostgresITSupport {
     protectedPaths.forEach((path, method) -> {
       var documented = operation(path, method);
       assertThat(documented.at("/security/0/bearerAuth").isArray()).as(path).isTrue();
-      assertThat(documented.path("parameters").isEmpty()).as(path).isTrue();
+      if (path.contains("{")) {
+        assertThat(documented.at("/parameters/0/in").asText()).as(path).isEqualTo("path");
+        assertThat(documented.at("/parameters/0/required").asBoolean()).as(path).isTrue();
+      } else {
+        assertThat(documented.path("parameters").isEmpty()).as(path).isTrue();
+      }
       assertThat(fields(spec.path("paths").path(path))).containsExactly(method);
     });
     mvc.perform(get("/swagger-ui/index.html")).andExpect(status().isOk());
@@ -59,6 +80,8 @@ class OpenApiContractDatabaseIT extends AccountPostgresITSupport {
     checkBody("/auth/reissue", "post", "refreshToken");
     checkBody("/auth/logout", "post", "refreshToken");
     checkBody("/my/password", "patch", "currentPassword", "newPassword");
+    checkBody("/search/analyses/manual", "post", "productName", "wholesalePrice", "shippingFee",
+        "hasPricePolicy");
     var marketing = checkBody("/my/marketing-consent", "patch", "agreed");
     assertThat(marketing.at("/properties/agreed/type").asText()).isEqualTo("boolean");
     var profile = checkBody("/my/profile", "patch");
@@ -83,6 +106,9 @@ class OpenApiContractDatabaseIT extends AccountPostgresITSupport {
     statuses("/my/profile", "patch", "200", "400", "401", "409", "415", "500");
     statuses("/my/password", "patch", "200", "400", "401", "415", "500");
     statuses("/my/marketing-consent", "patch", "200", "400", "401", "415", "500");
+    statuses("/search/analyses/manual", "post", "202", "400", "401", "409", "415", "429", "500", "503");
+    statuses("/search/analyses/{analysisId}/status", "get", "200", "400", "401", "404", "500");
+    statuses("/search/reports/{reportId}", "get", "200", "400", "401", "404", "500");
     var unauthorized = operation("/auth/reissue", "post").at("/responses/401/content/application~1json");
     assertThat(fields(unauthorized.path("examples"))).containsExactlyInAnyOrder("A003", "A004", "A005");
     var error = unauthorized.at("/examples/A005/value");
