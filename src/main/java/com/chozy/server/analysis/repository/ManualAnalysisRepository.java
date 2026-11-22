@@ -89,14 +89,6 @@ public class ManualAnalysisRepository {
         """).param("analysis", analysisId).param("snapshot", snapshot).query(Long.class).single();
   }
 
-  public Optional<String> findReport(long reportId, long memberId) {
-    return jdbc.sql("""
-        SELECT CAST(r.snapshot AS text) FROM chozy.manual_analysis_reports r
-        JOIN chozy.manual_analysis_jobs j ON j.id = r.analysis_id
-        WHERE r.id = :report AND j.member_id = :member AND j.status = 'COMPLETED'
-        """).param("report", reportId).param("member", memberId).query(String.class).optional();
-  }
-
   private static Job mapJob(ResultSet row) throws SQLException {
     var input = new ManualAnalysisInput(row.getString("product_name"), row.getBigDecimal("wholesale_price"),
         row.getBigDecimal("shipping_fee"), row.getBoolean("has_price_policy"),

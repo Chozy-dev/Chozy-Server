@@ -42,6 +42,7 @@ public abstract class AccountPostgresITSupport {
   protected static final String NEW_PASSWORD = "NewExamplePassword456!";
   protected static final byte[] KEY = new byte[32];
   protected static final String V2_LOGIN = "existingv2";
+  protected static final long V6_REPORT_ID;
   private static final PostgreSQLContainer<?> DB = new PostgreSQLContainer<>("postgres:16")
       .withDatabaseName("chozy_account_test").withUsername("test").withPassword(UUID.randomUUID().toString());
 
@@ -59,7 +60,35 @@ public abstract class AccountPostgresITSupport {
     } catch (SQLException ex) {
       throw new ExceptionInInitializerError(ex);
     }
+    flyway().target("6").load().migrate();
+    V6_REPORT_ID = seedV6Report();
     flyway().load().migrate();
+  }
+
+  private static long seedV6Report() {
+    try (var connection = DriverManager.getConnection(DB.getJdbcUrl(), DB.getUsername(), DB.getPassword());
+        var insert = connection.prepareStatement("""
+            WITH job AS (
+              INSERT INTO chozy.manual_analysis_jobs
+                (member_id, product_name, wholesale_price, shipping_fee, has_price_policy, minimum_selling_price,
+                  keyword, requested_at, status, completed_at)
+              SELECT id, 'Legacy lantern', 7000, 2500, true, 11000, 'lantern',
+                     '2026-01-14T03:00:00Z'::timestamptz, 'COMPLETED', '2026-01-14T03:01:00Z'::timestamptz
+              FROM chozy.members WHERE login_id = ?
+              RETURNING id
+            )
+            INSERT INTO chozy.manual_analysis_reports (analysis_id, snapshot)
+            SELECT id, '{"product":{"productName":"Legacy lantern"}}'::jsonb FROM job
+            RETURNING id
+            """)) {
+      insert.setString(1, V2_LOGIN);
+      try (var result = insert.executeQuery()) {
+        if (!result.next()) throw new IllegalStateException("Missing V6 fixture report");
+        return result.getLong(1);
+      }
+    } catch (SQLException ex) {
+      throw new ExceptionInInitializerError(ex);
+    }
   }
 
   private static FluentConfiguration flyway() {

@@ -9,7 +9,6 @@ import com.chozy.server.analysis.service.ManualAnalysisService;
 import com.chozy.server.common.config.OpenApiContract;
 import com.chozy.server.common.response.ApiResponse;
 import com.chozy.server.common.security.AuthenticatedMember;
-import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -27,7 +26,6 @@ import org.springframework.web.bind.annotation.*;
 public class ManualAnalysisController {
   private static final String ACCEPTED = "직접 입력 정밀분석 요청이 접수되었습니다.";
   private static final String PROGRESS = "정밀분석 진행 상태 조회가 완료되었습니다.";
-  private static final String REPORT = "정밀분석 리포트 조회가 완료되었습니다.";
 
   private final ManualAnalysisService service;
 
@@ -50,13 +48,5 @@ public class ManualAnalysisController {
   public ApiResponse<Progress> progress(@AuthenticationPrincipal AuthenticatedMember member,
       @Positive @PathVariable long analysisId) {
     return ApiResponse.success(200, PROGRESS, service.progress(member, analysisId));
-  }
-
-  @GetMapping("/search/reports/{reportId}")
-  @Operation(summary = "정밀분석 리포트 조회")
-  @OpenApiContract(success = REPORT, errors = {INVALID_INPUT, TYPE_MISMATCH, NOT_FOUND})
-  public ApiResponse<JsonNode> report(@AuthenticationPrincipal AuthenticatedMember member,
-      @Positive @PathVariable long reportId) {
-    return ApiResponse.success(200, REPORT, service.report(member, reportId));
   }
 }

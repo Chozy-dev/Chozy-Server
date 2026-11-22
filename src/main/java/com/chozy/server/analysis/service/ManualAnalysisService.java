@@ -11,10 +11,6 @@ import com.chozy.server.common.error.ErrorCode;
 import com.chozy.server.common.security.AuthenticatedMember;
 import com.chozy.server.member.service.MemberAccess;
 import com.chozy.server.usage.service.ReportUsageService;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
@@ -38,16 +34,14 @@ public class ManualAnalysisService {
   private final ReportUsageService usage;
   private final ObjectProvider<ManualAnalysisEngine> engine;
   private final Clock clock;
-  private final ObjectMapper mapper;
 
   public ManualAnalysisService(ManualAnalysisRepository jobs, MemberAccess members, ReportUsageService usage,
-      ObjectProvider<ManualAnalysisEngine> engine, Clock clock, ObjectMapper mapper) {
+      ObjectProvider<ManualAnalysisEngine> engine, Clock clock) {
     this.jobs = jobs;
     this.members = members;
     this.usage = usage;
     this.engine = engine;
     this.clock = clock;
-    this.mapper = mapper;
   }
 
   @Transactional
@@ -87,18 +81,6 @@ public class ManualAnalysisService {
     };
     var completedAt = job.completedAt() == null ? null : job.completedAt().atZoneSameInstant(KOREA).toOffsetDateTime();
     return new Progress(id, job.status(), step, TOTAL_STEPS, job.reportId(), completedAt, job.errorMessage());
-  }
-
-  @Transactional(readOnly = true)
-  public JsonNode report(AuthenticatedMember member, long reportId) {
-    members.requireCurrent(member);
-    String snapshot = jobs.findReport(reportId, member.memberId()).orElseThrow(ManualAnalysisService::notFound);
-    try {
-      var report = (ObjectNode) mapper.readTree(snapshot);
-      return report.put("reportId", reportId);
-    } catch (JsonProcessingException ex) {
-      throw new IllegalStateException("Invalid stored report", ex);
-    }
   }
 
   @Transactional

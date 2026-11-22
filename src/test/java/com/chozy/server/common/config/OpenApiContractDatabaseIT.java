@@ -43,10 +43,12 @@ class OpenApiContractDatabaseIT extends AccountPostgresITSupport {
   void exposesOnlyImplementedOperationsWithTheCorrectBearerRequirements() throws Exception {
     var publicPaths = Map.of("/auth/signup", "post", "/auth/login", "post",
         "/auth/check-login-id", "get", "/auth/reissue", "post");
-    var protectedPaths = Map.of("/auth/logout", "post", "/my/dashboard", "get",
-        "/my/profile", "patch", "/my/password", "patch", "/my/marketing-consent", "patch",
-        "/home/report-usage", "get", "/search/analyses/manual", "post",
-        "/search/analyses/{analysisId}/status", "get", "/search/reports/{reportId}", "get");
+    var protectedPaths = Map.ofEntries(Map.entry("/auth/logout", "post"), Map.entry("/my/dashboard", "get"),
+        Map.entry("/my/profile", "patch"), Map.entry("/my/password", "patch"),
+        Map.entry("/my/marketing-consent", "patch"), Map.entry("/home/report-usage", "get"),
+        Map.entry("/search/analyses/manual", "post"), Map.entry("/search/analyses/{analysisId}/status", "get"),
+        Map.entry("/search/reports/{reportId}", "get"), Map.entry("/search/reports/{reportId}/feedback", "post"),
+        Map.entry("/search/analyses/recent", "get"));
     var expectedPaths = new HashSet<>(publicPaths.keySet());
     expectedPaths.addAll(protectedPaths.keySet());
     assertThat(fields(spec.path("paths"))).isEqualTo(expectedPaths);
@@ -63,7 +65,7 @@ class OpenApiContractDatabaseIT extends AccountPostgresITSupport {
       if (path.contains("{")) {
         assertThat(documented.at("/parameters/0/in").asText()).as(path).isEqualTo("path");
         assertThat(documented.at("/parameters/0/required").asBoolean()).as(path).isTrue();
-      } else {
+      } else if (!path.equals("/search/analyses/recent")) {
         assertThat(documented.path("parameters").isEmpty()).as(path).isTrue();
       }
       assertThat(fields(spec.path("paths").path(path))).containsExactly(method);
@@ -82,6 +84,9 @@ class OpenApiContractDatabaseIT extends AccountPostgresITSupport {
     checkBody("/my/password", "patch", "currentPassword", "newPassword");
     checkBody("/search/analyses/manual", "post", "productName", "wholesalePrice", "shippingFee",
         "hasPricePolicy");
+    var feedback = checkBody("/search/reports/{reportId}/feedback", "post", "feedback");
+    assertThat(resolve(feedback.at("/properties/feedback")).path("enum"))
+        .extracting(JsonNode::asText).containsExactlyInAnyOrder("APPROPRIATE", "TOO_HIGH", "TOO_LOW");
     var marketing = checkBody("/my/marketing-consent", "patch", "agreed");
     assertThat(marketing.at("/properties/agreed/type").asText()).isEqualTo("boolean");
     var profile = checkBody("/my/profile", "patch");
@@ -92,6 +97,11 @@ class OpenApiContractDatabaseIT extends AccountPostgresITSupport {
     assertThat(query.path("name").asText()).isEqualTo("loginId");
     assertThat(query.path("in").asText()).isEqualTo("query");
     assertThat(query.path("required").asBoolean()).isTrue();
+    var recent = operation("/search/analyses/recent", "get").path("parameters");
+    assertThat(recent).extracting(parameter -> parameter.path("name").asText()).containsExactly("page", "size");
+    assertThat(recent.at("/0/schema/default").asInt()).isZero();
+    assertThat(recent.at("/1/schema/default").asInt()).isEqualTo(10);
+    assertThat(recent.at("/1/schema/maximum").asInt()).isEqualTo(100);
   }
 
   @Test
@@ -109,6 +119,8 @@ class OpenApiContractDatabaseIT extends AccountPostgresITSupport {
     statuses("/search/analyses/manual", "post", "202", "400", "401", "409", "415", "429", "500", "503");
     statuses("/search/analyses/{analysisId}/status", "get", "200", "400", "401", "404", "500");
     statuses("/search/reports/{reportId}", "get", "200", "400", "401", "404", "500");
+    statuses("/search/analyses/recent", "get", "200", "400", "401", "500");
+    statuses("/search/reports/{reportId}/feedback", "post", "201", "400", "401", "404", "409", "415", "500");
     var unauthorized = operation("/auth/reissue", "post").at("/responses/401/content/application~1json");
     assertThat(fields(unauthorized.path("examples"))).containsExactlyInAnyOrder("A003", "A004", "A005");
     var error = unauthorized.at("/examples/A005/value");
@@ -149,6 +161,30 @@ class OpenApiContractDatabaseIT extends AccountPostgresITSupport {
     assertThat(successData("/my/password", "patch", "200").path("type").toString()).contains("null");
     assertThat(operation("/auth/logout", "post").at("/responses/200/content/application~1json/example/data").isNull())
         .isTrue();
+  }
+
+  @Test
+  void documentsTypedReportAndRecentAnalysisPayloads() {
+    var detail = successData("/search/reports/{reportId}", "get", "200").path("properties");
+    assertThat(fields(detail)).containsExactlyInAnyOrder("reportId", "analysisId", "analysisType", "source",
+        "analyzedAt", "product", "summary", "internalDiagnosis", "externalDiagnosis", "investmentStrategy",
+        "investmentSimulation", "unavailableFeatures", "notices");
+    var product = resolve(detail.path("product"));
+    assertThat(product.at("/properties/purchaseUrl/type").toString()).contains("string", "null");
+    assertThat(product.at("/properties/supplyConditions/$ref").isMissingNode()).isTrue();
+    assertThat(product.at("/properties/supplyConditions/anyOf/1/type").toString()).contains("null");
+    assertThat(resolve(product.at("/properties/supplyConditions/anyOf/0")).path("properties").has("returnAllowed"))
+        .isTrue();
+    var registration = resolve(resolve(detail.path("investmentStrategy")).at("/properties/coupangRegistration"));
+    assertThat(registration.at("/properties/requiredCertifications/type").toString()).contains("array");
+
+    var recent = successData("/search/analyses/recent", "get", "200");
+    var item = resolve(recent.at("/properties/analyses/items"));
+    assertThat(item.at("/properties/analyzedAt/type").toString()).contains("string", "null");
+    assertThat(item.at("/properties/reportId/type").toString()).contains("integer", "null");
+    assertThat(item.at("/properties/investmentGrade/anyOf/1/type").toString()).contains("null");
+    assertThat(resolve(item.at("/properties/investmentGrade/anyOf/0")).path("enum"))
+        .extracting(JsonNode::asText).containsExactlyInAnyOrder("SUITABLE", "CONDITIONAL", "NOT_RECOMMENDED");
   }
 
   private JsonNode operation(String path, String method) {
