@@ -13,4 +13,6 @@ public @interface OpenApiContract {
   String success();
 
   ErrorCode[] errors() default {};
+
+  boolean optionalBearer() default false;
 }

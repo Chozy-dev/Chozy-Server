@@ -34,6 +34,16 @@ class OpenApiContractDatabaseIT extends AccountPostgresITSupport {
         .param("id", member.id()).query(Long.class).single()).isZero();
   }
 
+  @Test
+  void rejectsScreeningWhenTheProviderIsAbsent() throws Exception {
+    var member = account();
+    mvc.perform(post("/search/screenings").header("Authorization", member.bearer())
+            .contentType(MediaType.APPLICATION_JSON).content("{\"keywords\":[\"lantern\"]}"))
+        .andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.code").value("S001"));
+    assertThat(jdbc.sql("SELECT count(*) FROM chozy.member_screening_runs WHERE member_id = :id")
+        .param("id", member.id()).query(Long.class).single()).isZero();
+  }
+
   @BeforeEach
   void loadOpenApi() throws Exception {
     spec = response(mvc.perform(get("/v3/api-docs")).andExpect(status().isOk()));
@@ -42,15 +52,28 @@ class OpenApiContractDatabaseIT extends AccountPostgresITSupport {
   @Test
   void exposesOnlyImplementedOperationsWithTheCorrectBearerRequirements() throws Exception {
     var publicPaths = Map.of("/auth/signup", "post", "/auth/login", "post",
-        "/auth/check-login-id", "get", "/auth/reissue", "post");
+        "/auth/check-login-id", "get", "/auth/reissue", "post", "/search/categories", "get");
+    var optionalBearer = Map.of("/search/screenings", "post",
+        "/search/screenings/{screeningId}/shopping-analysis", "post");
     var protectedPaths = Map.ofEntries(Map.entry("/auth/logout", "post"), Map.entry("/my/dashboard", "get"),
         Map.entry("/my/profile", "patch"), Map.entry("/my/password", "patch"),
         Map.entry("/my/marketing-consent", "patch"), Map.entry("/home/report-usage", "get"),
         Map.entry("/search/analyses/manual", "post"), Map.entry("/search/analyses/{analysisId}/status", "get"),
         Map.entry("/search/reports/{reportId}", "get"), Map.entry("/search/reports/{reportId}/feedback", "post"),
-        Map.entry("/search/analyses/recent", "get"));
+        Map.entry("/search/analyses/recent", "get"), Map.entry("/search/screenings/recent", "get"));
+    var favoritesAndNotifications = Map.of(
+        "/favorites", Set.of("get", "post"),
+        "/favorites/{favoriteId}", Set.of("get", "delete"),
+        "/favorites/{favoriteId}/status", Set.of("patch"),
+        "/favorites/{favoriteId}/sales-results", Set.of("post"),
+        "/home/notifications", Set.of("get"),
+        "/home/notifications/{notificationId}/read", Set.of("patch"),
+        "/home/notifications/read-all", Set.of("patch"),
+        "/my/notification-settings", Set.of("get", "patch"));
     var expectedPaths = new HashSet<>(publicPaths.keySet());
     expectedPaths.addAll(protectedPaths.keySet());
+    expectedPaths.addAll(optionalBearer.keySet());
+    expectedPaths.addAll(favoritesAndNotifications.keySet());
     assertThat(fields(spec.path("paths"))).isEqualTo(expectedPaths);
     assertThat(spec.at("/components/securitySchemes/bearerAuth/type").asText()).isEqualTo("http");
     assertThat(spec.at("/components/securitySchemes/bearerAuth/scheme").asText()).isEqualTo("bearer");
@@ -69,6 +92,18 @@ class OpenApiContractDatabaseIT extends AccountPostgresITSupport {
         assertThat(documented.path("parameters").isEmpty()).as(path).isTrue();
       }
       assertThat(fields(spec.path("paths").path(path))).containsExactly(method);
+    });
+    optionalBearer.forEach((path, method) -> {
+      var documented = operation(path, method);
+      assertThat(documented.at("/security/0").isObject()).as(path).isTrue();
+      assertThat(documented.at("/security/0").isEmpty()).as(path).isTrue();
+      assertThat(documented.at("/security/1/bearerAuth").isArray()).as(path).isTrue();
+      assertThat(fields(spec.path("paths").path(path))).containsExactly(method);
+    });
+    favoritesAndNotifications.forEach((path, methods) -> {
+      assertThat(fields(spec.path("paths").path(path))).isEqualTo(methods);
+      methods.forEach(method -> assertThat(operation(path, method).at("/security/0/bearerAuth").isArray())
+          .as("%s %s", method, path).isTrue());
     });
     mvc.perform(get("/swagger-ui/index.html")).andExpect(status().isOk());
     mvc.perform(get("/v3/api-docs/swagger-config"))
@@ -102,6 +137,13 @@ class OpenApiContractDatabaseIT extends AccountPostgresITSupport {
     assertThat(recent.at("/0/schema/default").asInt()).isZero();
     assertThat(recent.at("/1/schema/default").asInt()).isEqualTo(10);
     assertThat(recent.at("/1/schema/maximum").asInt()).isEqualTo(100);
+    checkBody("/favorites", "post", "reportId", "status");
+    checkBody("/search/screenings", "post", "keywords");
+    checkBody("/search/screenings/{screeningId}/shopping-analysis", "post", "keyword", "categoryCode");
+    checkBody("/favorites/{favoriteId}/status", "patch", "status");
+    checkBody("/favorites/{favoriteId}/sales-results", "post", "result");
+    var settings = checkBody("/my/notification-settings", "patch");
+    assertThat(fields(settings.path("properties"))).containsExactlyInAnyOrder("emailEnabled", "eventTypes", "thresholds");
   }
 
   @Test
@@ -121,6 +163,10 @@ class OpenApiContractDatabaseIT extends AccountPostgresITSupport {
     statuses("/search/reports/{reportId}", "get", "200", "400", "401", "404", "500");
     statuses("/search/analyses/recent", "get", "200", "400", "401", "500");
     statuses("/search/reports/{reportId}/feedback", "post", "201", "400", "401", "404", "409", "415", "500");
+    statuses("/favorites", "post", "200", "201", "400", "401", "404", "409", "415", "500");
+    statuses("/home/notifications/{notificationId}/read", "patch", "200", "400", "401", "404", "500");
+    statuses("/search/screenings", "post", "200", "400", "401", "415", "500", "503");
+    statuses("/search/screenings/{screeningId}/shopping-analysis", "post", "200", "400", "401", "404", "415", "500", "503");
     var unauthorized = operation("/auth/reissue", "post").at("/responses/401/content/application~1json");
     assertThat(fields(unauthorized.path("examples"))).containsExactlyInAnyOrder("A003", "A004", "A005");
     var error = unauthorized.at("/examples/A005/value");
@@ -135,6 +181,12 @@ class OpenApiContractDatabaseIT extends AccountPostgresITSupport {
 
   @Test
   void documentsResponseEnvelopesAndNullFields() {
+    var favorite = successData("/favorites", "post", "201");
+    var shopping = successData("/search/screenings/{screeningId}/shopping-analysis", "post", "200");
+    assertThat(shopping.at("/properties/quadrant/anyOf/1/type").toString()).contains("null");
+    assertThat(favorite.at("/properties/favoriteId/type").asText()).isEqualTo("integer");
+    assertThat(successData("/favorites", "post", "200")).isEqualTo(favorite);
+    assertThat(successData("/favorites/{favoriteId}", "delete", "200").path("type").toString()).contains("null");
     var signup = successData("/auth/signup", "post", "201");
     assertThat(fields(signup.path("properties")))
         .containsExactlyInAnyOrder("userId", "loginId", "nickname", "email", "createdAt");

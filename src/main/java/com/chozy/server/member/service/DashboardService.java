@@ -1,6 +1,7 @@
 package com.chozy.server.member.service;
 
 import com.chozy.server.common.security.AuthenticatedMember;
+import com.chozy.server.favorite.service.FavoriteService;
 import com.chozy.server.member.dto.Dashboard;
 import com.chozy.server.member.dto.Dashboard.*;
 import com.chozy.server.member.repository.MemberActivityRepository;
@@ -17,13 +18,15 @@ import org.springframework.transaction.annotation.Transactional;
 public class DashboardService {
   private final MemberAccess members;
   private final MemberActivityRepository activity;
+  private final FavoriteService favorites;
   private final ReportUsageService reportUsage;
   private final Clock clock;
 
   public DashboardService(MemberAccess members, MemberActivityRepository activity,
-      ReportUsageService reportUsage, Clock clock) {
+      FavoriteService favorites, ReportUsageService reportUsage, Clock clock) {
     this.members = members;
     this.activity = activity;
+    this.favorites = favorites;
     this.reportUsage = reportUsage;
     this.clock = clock;
   }
@@ -44,7 +47,7 @@ public class DashboardService {
         reportUsage.forMonth(id, month),
         new ScreeningUsage(month.period().toString(),
             activity.countScreeningRuns(id, month.startsAt(), month.nextResetAt()), true),
-        new FavoriteUsage(activity.countFavorites(id), 10),
+        new FavoriteUsage(favorites.counts(id).total(), FavoriteService.LIMIT),
         MarketingConsentService.current(member));
   }
 }

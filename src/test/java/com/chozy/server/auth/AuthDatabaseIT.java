@@ -147,7 +147,7 @@ class AuthDatabaseIT {
     mvc.perform(post("/auth/future")).andExpect(status().isUnauthorized());
     mvc.perform(post("/auth/logout").contentType(MediaType.APPLICATION_JSON).content(body(new TokenRequest(a.refreshToken()))))
         .andExpect(status().isUnauthorized());
-    mvc.perform(get("/favorites").header("Authorization", "Bearer " + a.accessToken())).andExpect(status().isNotFound());
+    mvc.perform(get("/favorites").header("Authorization", "Bearer " + a.accessToken())).andExpect(status().isOk());
     String expiredRefresh = new JwtTokens(KEY, 1, 1, Clock.offset(Clock.systemUTC(), Duration.ofSeconds(-30))).issue(a.userId(), "refresh");
     mvc.perform(post("/auth/reissue").contentType(MediaType.APPLICATION_JSON).content(body(new TokenRequest(expiredRefresh))))
         .andExpect(jsonPath("$.code").value("A005"));

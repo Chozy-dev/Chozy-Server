@@ -17,6 +17,8 @@ public enum ErrorCode {
   REPORT_SLOTS_RESERVED(409, "R002", "진행 중인 정밀분석이 남은 횟수를 사용 중입니다. 완료 후 다시 시도해 주세요."),
   ANALYSIS_UNAVAILABLE(503, "R003", "현재 직접 입력 정밀분석을 사용할 수 없습니다."),
   REPORT_SCORE_UNAVAILABLE(409, "R004", "종합점수가 계산된 리포트에만 의견을 남길 수 있습니다."),
+  FAVORITE_LIMIT_REACHED(409, "F001", "관심상품 등록 한도에 도달했습니다."),
+  SCREENING_UNAVAILABLE(503, "S001", "현재 키워드 분석에 필요한 데이터를 조회할 수 없습니다."),
   ACCESS_TOKEN_EXPIRED(401, "A003", "로그인이 만료되었습니다. 다시 로그인해 주세요."),
   INVALID_AUTHENTICATION(401, "A004", "인증 정보가 올바르지 않습니다. 다시 로그인해 주세요."),
   REFRESH_TOKEN_EXPIRED(401, "A005", "로그인 세션이 만료되었습니다. 다시 로그인해 주세요."),
