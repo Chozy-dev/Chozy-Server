@@ -47,7 +47,9 @@ public class SecurityConfiguration {
                       "/auth/signup", "/auth/login", "/auth/reissue", "/search/screenings",
                       "/search/screenings/{screeningId}/shopping-analysis", "/search/products/resolve-url").permitAll();
               auth.requestMatchers(org.springframework.http.HttpMethod.GET,
-                      "/auth/check-login-id", "/search/categories", "/search/coupang-categories").permitAll();
+                      "/auth/check-login-id", "/search/categories", "/search/coupang-categories",
+                      "/home/products/recommended", "/home/keywords/coupang", "/home/keywords/naver",
+                      "/home/keywords/compare").permitAll();
               auth.anyRequest().authenticated();
             });
     return http.build();

@@ -155,6 +155,14 @@ Swagger에서 인증·회원·홈·검색·리포트·관심상품·알림 API�
 
 `GET /search/categories`는 로그인 없이 호출할 수 있습니다. `POST /search/screenings`에 Bearer 토큰을 붙이면 성공 결과가 회원 최근 기록에 저장됩니다. 스크리닝과 쇼핑 반응 계산에 필요한 네이버 데이터 연결 전에는 S001/503을 반환합니다.
 
+`GET /home/products/recommended?source=DOMEME`는 로그인 없이 호출할 수 있습니다. 소싱처는 `DOMEME`, `OWNERCLAN` 중 하나이며 `size`를 생략하면 10개까지 요청합니다. `dev` Swagger에도 표시되며 실제 발행본 조회를 연결하기 전에는 H001/503을 반환합니다.
+
+`GET /home/keywords/coupang`은 로그인 없이 호출할 수 있습니다. `categoryId`를 생략하면 최신 완료 발행본에서 ID가 가장 작은 카테고리를 선택합니다. `dev` Swagger에도 표시되며 실제 발행본 조회를 연결하기 전에는 H002/503을 반환합니다.
+
+`GET /home/keywords/naver`와 `GET /home/keywords/compare`는 로그인 없이 호출할 수 있습니다. `themeCode`는 선택값이며 실제 발행본 조회를 연결하기 전에는 H003/503을 반환합니다.
+
+`dbdev` Swagger에서 회원탈퇴를 테스트하려면 테스트용 회원으로 로그인하고 `DELETE /my/account`에 현재 비밀번호를 `password`로 보냅니다. 성공하면 해당 계정의 로그인과 기존 토큰 사용이 차단됩니다.
+
 본인 완료 리포트의 `PATCH /search/reports/{reportId}/inputs`에 `{"cpc": 0}`을 보내 등급을 다시 계산하거나 `{"cpc": null}`로 CPC를 초기화할 수 있습니다. 수정 결과는 리포트 상세에서 확인됩니다.
 
 - API 기본 주소 `http://localhost:8080`

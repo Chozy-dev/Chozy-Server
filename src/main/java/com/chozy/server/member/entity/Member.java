@@ -36,6 +36,8 @@ public class Member {
   private boolean marketingAgreed;
   @Column(name = "marketing_updated_at")
   private Instant marketingUpdatedAt;
+  @Column(name = "withdrawn_at")
+  private Instant withdrawnAt;
 
   protected Member() {}
 
@@ -62,6 +64,7 @@ public class Member {
   public long getCredentialVersion() { return credentialVersion; }
   public boolean isMarketingAgreed() { return marketingAgreed; }
   public Instant getMarketingUpdatedAt() { return marketingUpdatedAt; }
+  public boolean isActive() { return withdrawnAt == null; }
 
   public void updateProfile(String nickname, String email, Instant now) {
     if (nickname != null) this.nickname = nickname;
@@ -71,6 +74,12 @@ public class Member {
 
   public void changePassword(String encodedPassword) {
     passwordHash = encodedPassword;
+    credentialVersion++;
+  }
+
+  public void withdraw(Instant now) {
+    withdrawnAt = now;
+    updatedAt = now;
     credentialVersion++;
   }
 

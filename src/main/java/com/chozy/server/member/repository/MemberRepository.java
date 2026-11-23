@@ -15,7 +15,7 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
   Optional<Member> lockById(long id);
 
   Optional<Member> findByLoginId(String loginId);
-  boolean existsByIdAndCredentialVersion(long id, long credentialVersion);
+  boolean existsByIdAndCredentialVersionAndWithdrawnAtIsNull(long id, long credentialVersion);
   boolean existsByLoginId(String loginId);
   boolean existsByEmail(String email);
 }

@@ -20,7 +20,7 @@ public class MemberAccess {
   }
 
   public boolean isCurrent(long memberId, long credentialVersion) {
-    return members.existsByIdAndCredentialVersion(memberId, credentialVersion);
+    return members.existsByIdAndCredentialVersionAndWithdrawnAtIsNull(memberId, credentialVersion);
   }
 
   public Member requireCurrent(AuthenticatedMember principal) {
@@ -39,7 +39,7 @@ public class MemberAccess {
   }
 
   private static Member requireVersion(Member member, long version) {
-    if (member.getCredentialVersion() != version) throw invalid();
+    if (!member.isActive() || member.getCredentialVersion() != version) throw invalid();
     return member;
   }
 
