@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.examples.Example;
 import io.swagger.v3.oas.models.media.*;
+import io.swagger.v3.oas.models.security.SecurityRequirement;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
@@ -28,6 +29,9 @@ final class OpenApiResponses implements OperationCustomizer {
   public Operation customize(Operation operation, HandlerMethod handler) {
     var contract = handler.getMethodAnnotation(OpenApiContract.class);
     if (contract == null) return operation;
+    if (contract.optionalBearer()) {
+      operation.setSecurity(List.of(new SecurityRequirement(), new SecurityRequirement().addList("bearerAuth")));
+    }
 
     var status = handler.getMethodAnnotation(ResponseStatus.class);
     int successStatus = status == null ? 200 : status.code().value();

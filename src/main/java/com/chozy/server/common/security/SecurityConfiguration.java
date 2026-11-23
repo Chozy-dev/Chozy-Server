@@ -44,9 +44,10 @@ public class SecurityConfiguration {
                         "/v3/api-docs", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**")
                     .permitAll();
               auth.requestMatchers(org.springframework.http.HttpMethod.POST,
-                      "/auth/signup", "/auth/login", "/auth/reissue").permitAll();
+                      "/auth/signup", "/auth/login", "/auth/reissue", "/search/screenings",
+                      "/search/screenings/{screeningId}/shopping-analysis").permitAll();
               auth.requestMatchers(org.springframework.http.HttpMethod.GET,
-                      "/auth/check-login-id").permitAll();
+                      "/auth/check-login-id", "/search/categories").permitAll();
               auth.anyRequest().authenticated();
             });
     return http.build();

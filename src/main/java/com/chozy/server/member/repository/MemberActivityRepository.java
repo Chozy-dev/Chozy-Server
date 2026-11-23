@@ -21,9 +21,4 @@ public class MemberActivityRepository {
         """).param("memberId", memberId).param("start", start).param("end", end)
         .query(Long.class).single();
   }
-
-  public long countFavorites(long memberId) {
-    return jdbc.sql("SELECT count(*) FROM chozy.member_favorites WHERE member_id = :memberId")
-        .param("memberId", memberId).query(Long.class).single();
-  }
 }
