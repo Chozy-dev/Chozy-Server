@@ -41,7 +41,7 @@ DTO는 API 입력·출력 계약이며 Entity를 그대로 반환하거나 요�
 
 오류는 기존 명세 예시의 `message/status/errors/code`를 사용한다. C001~C012, A003~A006은 원문 표의 상태/메시지와 같다. Bean Validation C001, 타입 C005, 누락 파라미터 C008, JSON C009, 메서드 C007, 미디어 C010, 경로 부재 C003, 업무 충돌 C002, 권한 C006, 예상 밖 오류 C004를 공통 처리한다. C011 업로드/C012 비동기 기반 매핑도 제공한다. 오류 응답에 내부 메시지·SQL·stack trace·입력값을 넣지 않는다. 예기치 않은 예외 로그는 타입만 남긴다.
 
-인증 공개 경로 4개만 method/path로 허용하며 다른 업무 경로는 기본 인증 필수다. `common.security.JwtAuthenticationFilter`는 Bearer Access Token의 서명과 만료를 확인한 뒤 회원의 현재 자격 증명 버전을 검증한다. `@AuthenticationPrincipal AuthenticatedMember`에서 회원 ID를 얻고 Service에서 자원 소유권을 검증한다. 잘못된 Authorization은 공개 API에서도 오류를 반환한다. OpenAPI의 bearerAuth는 로그아웃과 3단계 인증 API에 적용했다. offline/dev는 DB 의존 업무 빈 없이 기동한다.
+공개 업무 경로는 HTTP 메서드와 정확한 경로로 허용한다. 나머지 업무 경로는 인증이 필요하다. `common.security.JwtAuthenticationFilter`는 Bearer Access Token의 서명과 만료를 확인한 뒤 회원의 현재 자격 증명 버전을 검증한다. `@AuthenticationPrincipal AuthenticatedMember`에서 회원 ID를 얻고 Service에서 자원 소유권을 검증한다. 잘못된 Authorization은 공개 API에서도 오류를 반환한다. OpenAPI의 bearerAuth는 로그아웃과 3단계 인증 API에 적용했다. offline/dev는 DB 의존 업무 빈 없이 기동한다.
 
 OpenAPI 3.1은 MVC 매핑과 실제 DTO에서 요청·성공 스키마를 생성한다. `@OpenApiContract`는 공통 오류와 API별 오류를 문서에 추가하고 기존 `ErrorCode`에서 예시를 생성한다. `dbdev`는 업무 API 문서, `dev`는 DB 없는 공통 문서를 공개한다. `offline/database/prod`는 기본 비활성이다. Swagger UI 인증은 현재 페이지에서만 유지한다. 접속·프론트엔드 설정은 [README](../README.md#프론트엔드-api-테스트)를 따른다.
 
@@ -66,6 +66,23 @@ Spring 사용자/인증/리포트/관심상품/알림/사용량 데이터는 `ch
 **2026-11-22 문서 기준** 운영에는 stage7_supply_scoring, stage8_operations, stage7_history_policy_v2, stage10_scoring_performance 네 migration이 미적용이다. runtime_budget_guard·runtime 권한 분리·실제 Spring 로그인/DSN 전환도 미완료다. 사본 권한 검증은 운영 적용 완료가 아니다. read_supply_home/reserve_api_call의 원본은 INVOKER이고 access.py의 DEFINER/고정 search_path 권한 계획은 운영 미적용이다. EXECUTE만 부여하면 충분하다고 가정하거나 관리자 계정으로 우회하지 않는다. 1,500만 성능·용량과 지속 수집 SLA도 미검증이다.
 
 실시간 요청 호출은 정기 발행 조회와 별개다. 실제 계정/API별 공동 `reserve_api_call`/차단 계약과 권한을 먼저 확인한다. 로컬 카운터로 대체하거나 usage 초기화/차단 해제로 우회하지 않는다. 주소·인증·요청/응답 계약이 미정인 Collector HTTP/AI 클라이언트와 외부 설정 bean은 미리 만들지 않았다. 계약 확정 시 `@ConfigurationProperties`+검증, 환경변수 비밀값 주입, timeout/오류 매핑을 통합 경계에 추가한다.
+
+## 홈 공급 조건 우수 상품 조회
+
+- 공개 `GET /home/products/recommended`는 필수 `source`(`DOMEME`, `OWNERCLAN`)와 선택 `size`(기본 10, 1~1000)를 받는다. 필수값 누락은 C008/400, 타입과 소싱처 코드 오류는 C005/400, 크기 범위 오류는 C001/400이다.
+- `RecommendedProductReader`는 한 소싱처의 최신 완료 발행본에서 요청한 개수까지 순위순으로 읽는다. HTTP 응답은 발행본의 `asOf`를 `updatedAt`으로 반환하고 순위, 미확인 지표의 null, 실제 측정값 0을 유지한다. 조회 결과에 발행본이 없으면 `updatedAt: null, items: []`를, 상품이 없는 완료 발행본은 `items: []`와 해당 발행본 시각을 반환한다. 두 경우 모두 200이다.
+- 발행본 조회 제공자가 미등록이거나 데이터 소스를 사용할 수 없으면 H001/503을 반환한다. Collector SQL 연결은 실제 데이터 연동 단계에 둔다.
+
+## 홈 쿠팡 베스트 상품 조회
+
+- 공개 `GET /home/keywords/coupang`은 선택값 `categoryId`를 양의 정수로 받는다. 범위 오류는 C001/400이고 형식 오류는 C005/400이다. 날짜는 원본 명세에 따라 요청값으로 받지 않으며, 스냅샷 날짜 기준 최신 완료 발행본의 발행 시각을 `updatedAt`으로 반환한다.
+- `CoupangBestReader`는 카테고리와 순위순 상품을 동일 완료 발행본에서 읽는다. 카테고리는 ID 오름차순으로 반환하고 미선택 시 첫 카테고리를 기본으로 선택한다. 요청한 ID가 그 발행본에 없으면 요청 ID와 발행 시각을 유지하고 상품만 빈 배열로 반환한다. 완료 발행본이 없으면 두 목록을 빈 배열로, `updatedAt`과 `selectedCategoryId`를 null로 반환한다.
+- 순위 변동은 발행본 값을 유지한다. 전일 비교 기준이 없으면 `previousRank`, `rankChange`, `rankStatus`는 모두 null이다. 전일 발행본은 있지만 해당 상품이 전일 순위에 없으면 `rankStatus`는 `NEW`다. 조회 제공자가 미등록이거나 데이터 소스를 사용할 수 없으면 H002/503을 반환한다.
+
+## 홈 네이버 시즌 키워드와 쿠팡 비교
+
+- 공개 `GET /home/keywords/naver`와 `GET /home/keywords/compare`는 선택값 `themeCode`를 양의 정수로 받는다. 최신 완료 네이버 발행본을 기준으로 코드가 가장 작은 테마를 기본 선택하고 순위순 최대 10개를 사용한다. 요청한 테마가 발행본에 없으면 요청 코드와 빈 항목을 반환한다. 발행본 자체가 없으면 갱신 시각과 선택 코드는 null이다.
+- 비교는 같은 기준일이며 상품이 있는 완료 쿠팡 발행본에서 키워드별 고유 일치 상품 수를 사용한다. 1개 이상과 0개를 각각 `matchedKeywords`와 `unmatchedKeywords`로 반환하고 두 발행 시각 중 나중 값을 사용한다. 비교할 쿠팡 발행본이 없으면 두 목록을 비우고 안내를 반환한다. 불완전한 일치 건수와 미등록 조회 제공자는 H003/503이다.
 
 ## Docker 연결 계획
 
@@ -179,7 +196,13 @@ Access 만료=A003/401, Refresh 만료=A005/401, 위조·잘못된 형식·서�
 - 휴대폰 본인인증 업체 선정, SMS 발송/검증, 실제 DI 검증·저장 API는 미구현이다. 업체의 실제 결과를 검증하고 안전하게 해시한 DI로 기존 회원을 조회해 중복 생성을 차단해야 한다. 검증된 DI 기반 1인 1계정은 이 연동 뒤 완성한다. 가입 API에 인증 결과 필드가 없는 기획/명세 차이를 해소해야 한다.
 - 기존 미인증 일반 계정의 연결·전환, DI 해시 키 관리/교체 및 탈퇴·재가입 보관 정책을 확정해야 한다.
 - 카카오·네이버 OAuth, 소셜 연결·해제는 미구현이다. 동일 DI 기반 계정 중복 방지와 기존 회원 연결 정책을 확정하며 이메일/전화번호 일치만으로 타인 소셜 계정을 자동 연결하지 않는다. 소셜 계정에는 비밀번호가 없으므로 password_hash NOT NULL 변경 또는 인증수단 분리 Migration이 필요하다. 이번에는 가짜 클래스·사전 소셜 테이블을 만들지 않았다.
-- 이메일 인증, 비밀번호 찾기/재설정, 회원탈퇴 및 탈퇴 상태 검증은 추후 구현 예정이다. 이메일 인증은 기획서에서 가입 요건으로 제외되어 적용 목적과 계약을 별도 확정한다. 마이페이지 회원 관리와 비밀번호 변경은 3단계에 구현했다.
+- 이메일 인증과 비밀번호 찾기/재설정은 후속이다. 이메일 인증은 기획서에서 가입 요건으로 제외되어 적용 목적과 계약을 별도 확정한다.
+
+### 회원탈퇴
+
+JWT `DELETE /my/account`는 토큰 회원을 잠근 뒤 현재 비밀번호를 검증한다. 비밀번호가 틀리면 C001/400이다. 성공 시 V11의 `withdrawn_at`과 자격 증명 버전을 갱신하고 모든 Refresh Token을 동일 트랜잭션에서 폐기한다. 로그인·Access 인증·Refresh 회전은 활성 상태를 검증한다. 이미 접수된 분석 작업은 기존 작업 처리 정책을 따른다.
+
+현재 비활성 계정의 식별자와 관련 데이터를 보존한다. 보관 기간과 삭제·비식별화, 동일 식별자로 재가입하는 정책은 공개 전에 확정해야 한다. 현재 Unique 제약은 탈퇴 계정에도 적용한다.
 - 다음 단계는 프론트 인증 흐름 연결·명세 보완, 본인인증 계약 선정과 계정 전환 설계, 인증 주체를 사용하는 회원 소유 업무 API 구현이 적절하다. 운영 공개 전 요청 제한과 인증 시도 모니터링도 결정한다.
 
 ### 검증 방식

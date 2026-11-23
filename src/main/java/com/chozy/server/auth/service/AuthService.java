@@ -62,6 +62,7 @@ public class AuthService {
         && encoder.matches(request.password(), member.map(Member::getPasswordHash).orElse(dummyHash));
     if (member.isEmpty() || !matches) throw invalid();
     var m = member.orElseThrow();
+    if (!m.isActive()) throw invalid();
     Tokens tokens = issue(m);
     return new LoginResult(m.getId(), m.getNickname(), tokens.accessToken(), tokens.refreshToken(), "Bearer", tokens.expiresIn());
   }

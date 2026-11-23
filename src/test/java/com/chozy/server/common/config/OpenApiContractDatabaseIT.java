@@ -70,13 +70,16 @@ class OpenApiContractDatabaseIT extends AccountPostgresITSupport {
 
   @Test
   void exposesOnlyImplementedOperationsWithTheCorrectBearerRequirements() throws Exception {
-    var publicPaths = Map.of("/auth/signup", "post", "/auth/login", "post",
-        "/auth/check-login-id", "get", "/auth/reissue", "post", "/search/categories", "get",
-        "/search/products/resolve-url", "post", "/search/coupang-categories", "get");
+    var publicPaths = Map.ofEntries(Map.entry("/auth/signup", "post"), Map.entry("/auth/login", "post"),
+        Map.entry("/auth/check-login-id", "get"), Map.entry("/auth/reissue", "post"),
+        Map.entry("/search/categories", "get"), Map.entry("/search/products/resolve-url", "post"),
+        Map.entry("/search/coupang-categories", "get"), Map.entry("/home/products/recommended", "get"),
+        Map.entry("/home/keywords/coupang", "get"), Map.entry("/home/keywords/naver", "get"),
+        Map.entry("/home/keywords/compare", "get"));
     var optionalBearer = Map.of("/search/screenings", "post",
         "/search/screenings/{screeningId}/shopping-analysis", "post");
     var protectedPaths = Map.ofEntries(Map.entry("/auth/logout", "post"), Map.entry("/my/dashboard", "get"),
-        Map.entry("/my/profile", "patch"), Map.entry("/my/password", "patch"),
+        Map.entry("/my/profile", "patch"), Map.entry("/my/password", "patch"), Map.entry("/my/account", "delete"),
         Map.entry("/my/marketing-consent", "patch"), Map.entry("/home/report-usage", "get"),
         Map.entry("/search/analyses/manual", "post"), Map.entry("/search/analyses/{analysisId}/status", "get"),
         Map.entry("/search/analyses/url", "post"),
@@ -139,6 +142,7 @@ class OpenApiContractDatabaseIT extends AccountPostgresITSupport {
     checkBody("/auth/reissue", "post", "refreshToken");
     checkBody("/auth/logout", "post", "refreshToken");
     checkBody("/my/password", "patch", "currentPassword", "newPassword");
+    checkBody("/my/account", "delete", "password");
     checkBody("/search/analyses/manual", "post", "productName", "wholesalePrice", "shippingFee",
         "hasPricePolicy");
     checkBody("/search/products/resolve-url", "post", "url");
@@ -188,6 +192,7 @@ class OpenApiContractDatabaseIT extends AccountPostgresITSupport {
     statuses("/home/report-usage", "get", "200", "401", "500");
     statuses("/my/profile", "patch", "200", "400", "401", "409", "415", "500");
     statuses("/my/password", "patch", "200", "400", "401", "415", "500");
+    statuses("/my/account", "delete", "200", "400", "401", "415", "500");
     statuses("/my/marketing-consent", "patch", "200", "400", "401", "415", "500");
     statuses("/search/analyses/manual", "post", "202", "400", "401", "409", "415", "429", "500", "503");
     statuses("/search/products/resolve-url", "post", "200", "400", "401", "415", "500", "503");
@@ -246,6 +251,7 @@ class OpenApiContractDatabaseIT extends AccountPostgresITSupport {
     assertThat(consent.at("/updatedAt/type").toString()).contains("string", "null");
     assertThat(successData("/auth/logout", "post", "200").path("type").toString()).contains("null");
     assertThat(successData("/my/password", "patch", "200").path("type").toString()).contains("null");
+    assertThat(successData("/my/account", "delete", "200").path("type").toString()).contains("null");
     assertThat(operation("/auth/logout", "post").at("/responses/200/content/application~1json/example/data").isNull())
         .isTrue();
   }

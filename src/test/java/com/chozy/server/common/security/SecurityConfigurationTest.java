@@ -22,7 +22,11 @@ class SecurityConfigurationTest {
   @CsvSource({
     "/auth/logout,POST",
     "/search/analyses/url,POST",
-    "/home/products/recommended,GET",
+    "/home/products/recommended,POST",
+    "/home/keywords/coupang,POST",
+    "/home/keywords/naver,POST",
+    "/home/keywords/compare,POST",
+    "/my/account,DELETE",
     "/my/dashboard,GET",
     "/unimplemented,GET"
   })
@@ -38,6 +42,29 @@ class SecurityConfigurationTest {
   void fakeBearerIsNotAuthentication() throws Exception {
     mvc.perform(get("/my/dashboard").header("Authorization", "Bearer fake"))
         .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  void publicRecommendationsReportTheMissingProvider() throws Exception {
+    mvc.perform(get("/home/products/recommended").param("source", "DOMEME"))
+        .andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.code").value("H001"));
+    mvc.perform(get("/home/products/recommended").param("source", "DOMEME")
+            .header("Authorization", "Bearer fake"))
+        .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("A004"));
+  }
+
+  @Test
+  void publicCoupangBestReportsTheMissingProvider() throws Exception {
+    mvc.perform(get("/home/keywords/coupang"))
+        .andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.code").value("H002"));
+    mvc.perform(get("/home/keywords/coupang").header("Authorization", "Bearer fake"))
+        .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("A004"));
+  }
+
+  @ParameterizedTest
+  @CsvSource({"/home/keywords/naver", "/home/keywords/compare"})
+  void publicNaverOperationsReportTheMissingProvider(String path) throws Exception {
+    mvc.perform(get(path)).andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.code").value("H003"));
   }
 
   @Test
