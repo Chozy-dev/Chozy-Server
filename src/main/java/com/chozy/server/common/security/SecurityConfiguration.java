@@ -45,9 +45,9 @@ public class SecurityConfiguration {
                     .permitAll();
               auth.requestMatchers(org.springframework.http.HttpMethod.POST,
                       "/auth/signup", "/auth/login", "/auth/reissue", "/search/screenings",
-                      "/search/screenings/{screeningId}/shopping-analysis").permitAll();
+                      "/search/screenings/{screeningId}/shopping-analysis", "/search/products/resolve-url").permitAll();
               auth.requestMatchers(org.springframework.http.HttpMethod.GET,
-                      "/auth/check-login-id", "/search/categories").permitAll();
+                      "/auth/check-login-id", "/search/categories", "/search/coupang-categories").permitAll();
               auth.anyRequest().authenticated();
             });
     return http.build();

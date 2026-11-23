@@ -1,5 +1,6 @@
 package com.chozy.server.report.repository;
 
+import com.chozy.server.analysis.dto.AnalysisSource;
 import com.chozy.server.analysis.dto.AnalysisStatus;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -23,7 +24,9 @@ public class RecentAnalysisRepository {
 
   public List<Entry> findOwned(long memberId, long offset, int size) {
     return jdbc.sql("""
-        SELECT j.id AS analysis_id, j.status, j.product_name, r.id AS report_id,
+        SELECT j.id AS analysis_id, j.status, j.source, j.product_id, r.id AS report_id,
+               COALESCE(j.product_name, r.snapshot #>> '{product,productName}') AS product_name,
+               CASE WHEN j.source <> 'MANUAL' THEN r.snapshot #>> '{product,productImageUrl}' END AS image_url,
                CASE WHEN j.status = 'COMPLETED' THEN j.completed_at END AS analyzed_at,
                CASE WHEN jsonb_exists(r.snapshot -> 'externalDiagnosis', 'keyword')
                     THEN r.snapshot #>> '{externalDiagnosis,keyword}' ELSE j.keyword END AS keyword,
@@ -35,11 +38,13 @@ public class RecentAnalysisRepository {
         LIMIT :size OFFSET :offset
         """).param("member", memberId).param("size", size).param("offset", offset)
         .query((row, index) -> new Entry(row.getLong("analysis_id"), row.getObject("report_id", Long.class),
-            row.getString("product_name"), row.getString("keyword"), row.getString("summary"),
+            AnalysisSource.valueOf(row.getString("source")), row.getString("product_id"),
+            row.getString("product_name"), row.getString("image_url"), row.getString("keyword"), row.getString("summary"),
             AnalysisStatus.valueOf(row.getString("status")), row.getObject("analyzed_at", OffsetDateTime.class)))
         .list();
   }
 
-  public record Entry(long analysisId, Long reportId, String productName, String keyword,
+  public record Entry(long analysisId, Long reportId, AnalysisSource source, String productId, String productName,
+      String imageUrl, String keyword,
       String summary, AnalysisStatus status, OffsetDateTime analyzedAt) {}
 }

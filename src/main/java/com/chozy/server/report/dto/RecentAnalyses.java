@@ -19,7 +19,7 @@ public record RecentAnalyses(
       AnalysisType analysisType,
       AnalysisSource source,
       @Schema(types = {"string", "null"}) String productId,
-      String productName,
+      @Schema(types = {"string", "null"}) String productName,
       @Schema(types = {"string", "null"}) String productImageUrl,
       @Schema(types = {"string", "null"}) String keyword,
       @Schema(types = {"number", "null"}) BigDecimal score,

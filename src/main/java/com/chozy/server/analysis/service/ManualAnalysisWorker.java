@@ -17,26 +17,32 @@ public class ManualAnalysisWorker {
 
   private final ManualAnalysisService service;
   private final ObjectProvider<ManualAnalysisEngine> engines;
+  private final ObjectProvider<UrlAnalysisEngine> urlEngines;
 
-  public ManualAnalysisWorker(ManualAnalysisService service, ObjectProvider<ManualAnalysisEngine> engines) {
+  public ManualAnalysisWorker(ManualAnalysisService service, ObjectProvider<ManualAnalysisEngine> engines,
+      ObjectProvider<UrlAnalysisEngine> urlEngines) {
     this.service = service;
     this.engines = engines;
+    this.urlEngines = urlEngines;
   }
 
   @Scheduled(cron = "${app.analysis.worker-cron:*/1 * * * * *}")
   public void runNext() {
     var engine = engines.getIfAvailable();
-    if (engine == null) return;
+    var urlEngine = urlEngines.getIfAvailable();
+    if (engine == null && urlEngine == null) return;
 
     var claimed = service.claim();
     if (claimed.isEmpty()) return;
     var job = claimed.get();
     try {
-      service.complete(job, engine.analyze(job.id(), job.input()));
+      var result = job.urlInput() == null ? engine.analyze(job.id(), job.input())
+          : urlEngine.analyze(job.id(), job.urlInput());
+      service.complete(job, result);
     } catch (ReportQuotaExceededException ex) {
       service.fail(job, "이번 달 무료 리포트 횟수를 모두 사용했습니다.");
     } catch (RuntimeException ex) {
-      log.warn("Manual analysis failed id={} type={}", job.id(), ex.getClass().getName());
+      log.warn("Analysis failed id={} type={}", job.id(), ex.getClass().getName());
       service.fail(job, "정밀분석에 실패했습니다. 잠시 후 다시 시도해 주세요.");
     }
   }

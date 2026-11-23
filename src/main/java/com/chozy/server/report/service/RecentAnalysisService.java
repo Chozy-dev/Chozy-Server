@@ -42,15 +42,16 @@ public class RecentAnalysisService {
     long offset = (long) page * size;
     long pages = Math.ceilDiv(total, size);
     var items = offset >= total ? List.<RecentAnalysisItem>of() : history.findOwned(member.memberId(), offset, size)
-        .stream().map(this::manualItem).toList();
+        .stream().map(this::item).toList();
     return new RecentAnalyses(items, page, size, total, pages, page + 1L < pages);
   }
 
-  private RecentAnalysisItem manualItem(Entry entry) {
+  private RecentAnalysisItem item(Entry entry) {
     ReportSummary summary = summary(entry.summary());
     var analyzedAt = entry.analyzedAt() == null ? null : entry.analyzedAt().atZoneSameInstant(KOREA).toOffsetDateTime();
-    return new RecentAnalysisItem(entry.analysisId(), entry.reportId(), AnalysisType.MANUAL, AnalysisSource.MANUAL,
-        null, entry.productName(), null, entry.keyword(), summary == null ? null : summary.score(),
+    var type = entry.source() == AnalysisSource.MANUAL ? AnalysisType.MANUAL : AnalysisType.URL;
+    return new RecentAnalysisItem(entry.analysisId(), entry.reportId(), type, entry.source(),
+        entry.productId(), entry.productName(), entry.imageUrl(), entry.keyword(), summary == null ? null : summary.score(),
         summary == null ? null : summary.investmentGrade(), entry.status(), analyzedAt);
   }
 
