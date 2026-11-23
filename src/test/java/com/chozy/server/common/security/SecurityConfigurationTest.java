@@ -21,6 +21,7 @@ class SecurityConfigurationTest {
   @ParameterizedTest
   @CsvSource({
     "/auth/logout,POST",
+    "/search/analyses/url,POST",
     "/home/products/recommended,GET",
     "/my/dashboard,GET",
     "/unimplemented,GET"
@@ -37,6 +38,20 @@ class SecurityConfigurationTest {
   void fakeBearerIsNotAuthentication() throws Exception {
     mvc.perform(get("/my/dashboard").header("Authorization", "Bearer fake"))
         .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  void publicUrlResolutionDistinguishesUnsupportedLinksFromUnavailableCatalog() throws Exception {
+    mvc.perform(post("/search/products/resolve-url").contentType("application/json")
+            .content("{\"url\":\"https://domeme.domeggook.com.example.org/123\"}"))
+        .andExpect(status().isOk()).andExpect(jsonPath("$.data.source").value("OTHER"))
+        .andExpect(jsonPath("$.data.manualInputRequired").value(true));
+    mvc.perform(post("/search/products/resolve-url").contentType("application/json")
+            .content("{\"url\":\"https://domeme.domeggook.com/123\"}"))
+        .andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.code").value("R003"));
+    mvc.perform(post("/search/products/resolve-url").contentType("application/json")
+            .content("{\"url\":\"file:///tmp/product\"}"))
+        .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("C001"));
   }
 
   @Test

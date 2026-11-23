@@ -46,6 +46,7 @@ public class FavoriteService {
   public RegistrationResult register(AuthenticatedMember member, Register request) {
     long memberId = members.lockCurrent(member).getId();
     var report = reports.detail(member, request.reportId());
+    if (report.source() != MANUAL) throw new BusinessException(ErrorCode.INVALID_INPUT);
     var existing = favorites.findByReport(memberId, report.reportId());
     var counts = counts(memberId);
     if (existing.isPresent()) {

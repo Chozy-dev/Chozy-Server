@@ -7,6 +7,9 @@ import com.chozy.server.common.response.ApiResponse;
 import com.chozy.server.common.security.AuthenticatedMember;
 import com.chozy.server.report.dto.ReportDetail;
 import com.chozy.server.report.dto.ReportFeedback;
+import com.chozy.server.report.dto.ReportInputs;
+import com.chozy.server.report.dto.ReportInputs.ReportInputPatch;
+import com.chozy.server.report.service.ReportInputService;
 import com.chozy.server.report.service.ReportService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -26,11 +29,14 @@ import org.springframework.web.bind.annotation.*;
 public class ReportController {
   private static final String DETAIL = "정밀분석 리포트 조회가 완료되었습니다.";
   private static final String FEEDBACK = "리포트 점수 의견이 저장되었습니다.";
+  private static final String INPUTS = "리포트 추가 입력값이 저장되고 재계산되었습니다.";
 
   private final ReportService reports;
+  private final ReportInputService inputs;
 
-  public ReportController(ReportService reports) {
+  public ReportController(ReportService reports, ReportInputService inputs) {
     this.reports = reports;
+    this.inputs = inputs;
   }
 
   @GetMapping("/{reportId}")
@@ -49,5 +55,14 @@ public class ReportController {
   public ApiResponse<ReportFeedback> feedback(@AuthenticationPrincipal AuthenticatedMember member,
       @Positive @PathVariable long reportId, @Valid @RequestBody ReportFeedback.Request request) {
     return ApiResponse.success(201, FEEDBACK, reports.saveFeedback(member, reportId, request.feedback()));
+  }
+
+  @PatchMapping("/{reportId}/inputs")
+  @Operation(summary = "리포트 추가 입력 및 재계산")
+  @OpenApiContract(success = INPUTS, errors = {TYPE_MISMATCH, NOT_FOUND, REPORT_INPUTS_CONFLICT,
+      REPORT_RECALCULATION_UNAVAILABLE})
+  public ApiResponse<ReportInputs> updateInputs(@AuthenticationPrincipal AuthenticatedMember member,
+      @Positive @PathVariable long reportId, @Valid @RequestBody ReportInputPatch request) {
+    return ApiResponse.success(200, INPUTS, inputs.update(member, reportId, request));
   }
 }

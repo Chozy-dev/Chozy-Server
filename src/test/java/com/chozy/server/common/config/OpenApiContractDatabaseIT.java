@@ -2,10 +2,12 @@ package com.chozy.server.common.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.chozy.server.support.AccountPostgresITSupport;
+import com.chozy.server.support.ReportDataFixture;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.HashSet;
 import java.util.Map;
@@ -30,6 +32,10 @@ class OpenApiContractDatabaseIT extends AccountPostgresITSupport {
                 {"productName":"Lantern","wholesalePrice":8000,"shippingFee":0,"hasPricePolicy":false}
                 """))
         .andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.code").value("R003"));
+    mvc.perform(post("/search/analyses/url").header("Authorization", member.bearer())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"url\":\"https://domeme.domeggook.com/12345678\"}"))
+        .andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.code").value("R003"));
     assertThat(jdbc.sql("SELECT count(*) FROM chozy.manual_analysis_jobs WHERE member_id = :id")
         .param("id", member.id()).query(Long.class).single()).isZero();
   }
@@ -44,6 +50,19 @@ class OpenApiContractDatabaseIT extends AccountPostgresITSupport {
         .param("id", member.id()).query(Long.class).single()).isZero();
   }
 
+  @Test
+  void leavesReportUnchangedWhenKeywordRefreshCannotRun() throws Exception {
+    var member = account();
+    var data = new ReportDataFixture(jdbc);
+    long analysis = data.analysis(member.id(), "Lantern", "COMPLETED", "2026-11-23T01:01:00Z");
+    long report = data.report(analysis, "{}");
+    mvc.perform(patch("/search/reports/{id}/inputs", report).header("Authorization", member.bearer())
+            .contentType(MediaType.APPLICATION_JSON).content("{\"keyword\":\"new keyword\",\"cpc\":100}"))
+        .andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.code").value("R006"));
+    assertThat(jdbc.sql("SELECT CAST(snapshot AS text) FROM chozy.manual_analysis_reports WHERE id = :id")
+        .param("id", report).query(String.class).single()).isEqualTo("{}");
+  }
+
   @BeforeEach
   void loadOpenApi() throws Exception {
     spec = response(mvc.perform(get("/v3/api-docs")).andExpect(status().isOk()));
@@ -52,14 +71,17 @@ class OpenApiContractDatabaseIT extends AccountPostgresITSupport {
   @Test
   void exposesOnlyImplementedOperationsWithTheCorrectBearerRequirements() throws Exception {
     var publicPaths = Map.of("/auth/signup", "post", "/auth/login", "post",
-        "/auth/check-login-id", "get", "/auth/reissue", "post", "/search/categories", "get");
+        "/auth/check-login-id", "get", "/auth/reissue", "post", "/search/categories", "get",
+        "/search/products/resolve-url", "post", "/search/coupang-categories", "get");
     var optionalBearer = Map.of("/search/screenings", "post",
         "/search/screenings/{screeningId}/shopping-analysis", "post");
     var protectedPaths = Map.ofEntries(Map.entry("/auth/logout", "post"), Map.entry("/my/dashboard", "get"),
         Map.entry("/my/profile", "patch"), Map.entry("/my/password", "patch"),
         Map.entry("/my/marketing-consent", "patch"), Map.entry("/home/report-usage", "get"),
         Map.entry("/search/analyses/manual", "post"), Map.entry("/search/analyses/{analysisId}/status", "get"),
+        Map.entry("/search/analyses/url", "post"),
         Map.entry("/search/reports/{reportId}", "get"), Map.entry("/search/reports/{reportId}/feedback", "post"),
+        Map.entry("/search/reports/{reportId}/inputs", "patch"),
         Map.entry("/search/analyses/recent", "get"), Map.entry("/search/screenings/recent", "get"));
     var favoritesAndNotifications = Map.of(
         "/favorites", Set.of("get", "post"),
@@ -119,7 +141,16 @@ class OpenApiContractDatabaseIT extends AccountPostgresITSupport {
     checkBody("/my/password", "patch", "currentPassword", "newPassword");
     checkBody("/search/analyses/manual", "post", "productName", "wholesalePrice", "shippingFee",
         "hasPricePolicy");
+    checkBody("/search/products/resolve-url", "post", "url");
+    var urlAnalysis = checkBody("/search/analyses/url", "post", "url");
+    assertThat(fields(urlAnalysis.path("properties"))).containsExactlyInAnyOrder("url", "keyword", "selectedOptionId");
     var feedback = checkBody("/search/reports/{reportId}/feedback", "post", "feedback");
+    var reportPatch = checkBody("/search/reports/{reportId}/inputs", "patch");
+    assertThat(fields(reportPatch.path("properties"))).containsExactlyInAnyOrder(
+        "expectedSellingPrice", "coupangCategoryCode", "keyword", "selectedOptionId", "cpc");
+    assertThat(reportPatch.path("anyOf")).extracting(schema -> schema.at("/required/0").asText())
+        .containsExactlyInAnyOrder("expectedSellingPrice", "coupangCategoryCode", "keyword", "selectedOptionId", "cpc");
+    assertThat(reportPatch.at("/properties/cpc/type").toString()).contains("null");
     assertThat(resolve(feedback.at("/properties/feedback")).path("enum"))
         .extracting(JsonNode::asText).containsExactlyInAnyOrder("APPROPRIATE", "TOO_HIGH", "TOO_LOW");
     var marketing = checkBody("/my/marketing-consent", "patch", "agreed");
@@ -159,10 +190,14 @@ class OpenApiContractDatabaseIT extends AccountPostgresITSupport {
     statuses("/my/password", "patch", "200", "400", "401", "415", "500");
     statuses("/my/marketing-consent", "patch", "200", "400", "401", "415", "500");
     statuses("/search/analyses/manual", "post", "202", "400", "401", "409", "415", "429", "500", "503");
+    statuses("/search/products/resolve-url", "post", "200", "400", "401", "415", "500", "503");
+    statuses("/search/coupang-categories", "get", "200", "401", "500");
+    statuses("/search/analyses/url", "post", "202", "400", "401", "409", "415", "429", "500", "503");
     statuses("/search/analyses/{analysisId}/status", "get", "200", "400", "401", "404", "500");
     statuses("/search/reports/{reportId}", "get", "200", "400", "401", "404", "500");
     statuses("/search/analyses/recent", "get", "200", "400", "401", "500");
     statuses("/search/reports/{reportId}/feedback", "post", "201", "400", "401", "404", "409", "415", "500");
+    statuses("/search/reports/{reportId}/inputs", "patch", "200", "400", "401", "404", "409", "415", "500", "503");
     statuses("/favorites", "post", "200", "201", "400", "401", "404", "409", "415", "500");
     statuses("/home/notifications/{notificationId}/read", "patch", "200", "400", "401", "404", "500");
     statuses("/search/screenings", "post", "200", "400", "401", "415", "500", "503");

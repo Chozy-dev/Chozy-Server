@@ -3,7 +3,7 @@ package com.chozy.server.report.service;
 import com.chozy.server.analysis.dto.AnalysisSource;
 import com.chozy.server.analysis.dto.AnalysisType;
 import com.chozy.server.report.dto.ReportDetail;
-import com.chozy.server.report.repository.ReportRepository.StoredManualReport;
+import com.chozy.server.report.repository.ReportRepository.StoredReport;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -14,7 +14,7 @@ import java.time.ZoneId;
 import java.util.LinkedHashSet;
 import java.util.List;
 
-/** Projects V6 manual snapshots and their saved inputs onto the report detail contract. */
+/** Projects stored analysis snapshots onto the report detail contract. */
 final class ReportSnapshotReader {
   private static final ZoneId KOREA = ZoneId.of("Asia/Seoul");
   private static final String MISSING_DATA = "저장된 분석 데이터가 부족합니다.";
@@ -33,24 +33,40 @@ final class ReportSnapshotReader {
             DeserializationFeature.ADJUST_DATES_TO_CONTEXT_TIME_ZONE);
   }
 
-  ReportDetail read(StoredManualReport stored) {
+  ReportDetail read(StoredReport stored) {
+    return read(stored, tree(stored));
+  }
+
+  ObjectNode tree(StoredReport stored) {
     try {
-      var report = (ObjectNode) trees.readTree(stored.snapshot());
+      return (ObjectNode) trees.readTree(stored.snapshot());
+    } catch (IOException ex) {
+      throw new IllegalStateException("Invalid stored report", ex);
+    }
+  }
+
+  ReportDetail read(StoredReport stored, ObjectNode snapshot) {
+    try {
+      var report = snapshot.deepCopy();
+      boolean manual = stored.source() == AnalysisSource.MANUAL;
+      var type = manual ? AnalysisType.MANUAL : AnalysisType.URL;
       report.put("reportId", stored.reportId()).put("analysisId", stored.analysisId())
-          .put("analysisType", AnalysisType.MANUAL.name()).put("source", AnalysisSource.MANUAL.name())
+          .put("analysisType", type.name()).put("source", stored.source().name())
           .put("analyzedAt", stored.completedAt().atZoneSameInstant(KOREA).toOffsetDateTime().toString());
-      manualProduct(report.withObjectProperty("product"), stored);
-      fillInternalDiagnosis(report.withObjectProperty("internalDiagnosis"), stored);
+      if (manual) {
+        manualProduct(report.withObjectProperty("product"), stored);
+        fillInternalDiagnosis(report.withObjectProperty("internalDiagnosis"), stored);
+        fillSimulation(report.withObjectProperty("investmentSimulation"), stored);
+        addUnavailableFeatures(report);
+      }
       fillAnalysisSections(report, stored);
-      fillSimulation(report.withObjectProperty("investmentSimulation"), stored);
-      addUnavailableFeatures(report);
       return details.readValue(report.traverse(mapper));
     } catch (IOException ex) {
       throw new IllegalStateException("Invalid stored report", ex);
     }
   }
 
-  private static void manualProduct(ObjectNode product, StoredManualReport stored) {
+  private static void manualProduct(ObjectNode product, StoredReport stored) {
     product.put("productName", stored.productName()).put("isAffiliateLink", false).put("saleBlocked", false);
     for (String field : List.of("productId", "productImageUrl", "originalUrl", "resolvedUrl", "purchaseUrl",
         "selectedOption", "manufacturer", "supplierName", "originCountry", "modelName", "sourceCategory",
@@ -59,7 +75,7 @@ final class ReportSnapshotReader {
     }
   }
 
-  private static void fillInternalDiagnosis(ObjectNode internal, StoredManualReport stored) {
+  private static void fillInternalDiagnosis(ObjectNode internal, StoredReport stored) {
     internal.putNull("supplyStability").putNull("supplierReliability");
     var profit = internal.withObjectProperty("profitability");
     profit.put("wholesalePrice", stored.wholesalePrice()).put("shippingFee", stored.shippingFee())
@@ -71,7 +87,7 @@ final class ReportSnapshotReader {
     defaultText(trademark, "description", SUPPLIER_CHECK);
   }
 
-  private static void fillAnalysisSections(ObjectNode report, StoredManualReport stored) {
+  private static void fillAnalysisSections(ObjectNode report, StoredReport stored) {
     defaultText(report.withObjectProperty("summary"), "description", MISSING_DATA);
     var external = report.withObjectProperty("externalDiagnosis");
     if (!external.has("keyword")) external.put("keyword", stored.keyword());
@@ -88,7 +104,7 @@ final class ReportSnapshotReader {
     defaultText(strategy.withObjectProperty("channelEfficiency"), "contentCompetitionStatus", "COMING_SOON");
   }
 
-  private static void fillSimulation(ObjectNode simulation, StoredManualReport stored) {
+  private static void fillSimulation(ObjectNode simulation, StoredReport stored) {
     simulation.put("wholesalePrice", stored.wholesalePrice()).put("shippingFee", stored.shippingFee())
         .put("minimumSellingPrice", stored.minimumSellingPrice());
     defaultText(simulation, "platform", "COUPANG");

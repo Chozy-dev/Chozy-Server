@@ -151,9 +151,11 @@ Chozy_Server/
 
 ## 프론트엔드 API 테스트
 
-Swagger에서 인증·회원·홈·검색·리포트·관심상품·알림 API를 테스트하려면 기존 [격리 개발 DB](#격리-개발-db-실행)를 실행하고 `dbdev`로 Spring을 기동합니다. Swagger를 활성화하는 추가 플래그는 필요 없습니다. DB 없이 실행하는 `dev`에서는 공개 쇼핑인사이트 분야 목록을 확인할 수 있습니다. 직접 입력 정밀분석은 실제 분석 엔진이 등록되기 전까지 요청에 R003/503을 반환합니다. 리포트 상세·의견·관심상품 등록에는 본인의 저장된 리포트가 필요합니다.
+Swagger에서 인증·회원·홈·검색·리포트·관심상품·알림 API를 테스트하려면 기존 [격리 개발 DB](#격리-개발-db-실행)를 실행하고 `dbdev`로 Spring을 기동합니다. Swagger를 활성화하는 추가 플래그는 필요 없습니다. DB 없이 실행하는 `dev`에서는 공개 쇼핑인사이트 분야, 쿠팡 대분류·기본 수수료율(`GET /search/coupang-categories`), 지원하지 않는 상품 URL의 직접 입력 안내를 확인할 수 있습니다. 상품·옵션 조회 제공자 또는 정밀분석 엔진이 필요한 요청은 연결 전까지 R003/503을 반환합니다. 리포트 상세·의견·관심상품 등록에는 본인의 저장된 리포트가 필요합니다.
 
 `GET /search/categories`는 로그인 없이 호출할 수 있습니다. `POST /search/screenings`에 Bearer 토큰을 붙이면 성공 결과가 회원 최근 기록에 저장됩니다. 스크리닝과 쇼핑 반응 계산에 필요한 네이버 데이터 연결 전에는 S001/503을 반환합니다.
+
+본인 완료 리포트의 `PATCH /search/reports/{reportId}/inputs`에 `{"cpc": 0}`을 보내 등급을 다시 계산하거나 `{"cpc": null}`로 CPC를 초기화할 수 있습니다. 수정 결과는 리포트 상세에서 확인됩니다.
 
 - API 기본 주소 `http://localhost:8080`
 - Swagger UI [http://localhost:8080/swagger-ui/index.html](http://localhost:8080/swagger-ui/index.html)

@@ -5,7 +5,10 @@ import static com.chozy.server.common.error.ErrorCode.*;
 import com.chozy.server.analysis.dto.ManualAnalysisInput;
 import com.chozy.server.analysis.dto.ManualAnalysisResponses.Accepted;
 import com.chozy.server.analysis.dto.ManualAnalysisResponses.Progress;
+import com.chozy.server.analysis.dto.UrlAnalyses.SubmitRequest;
+import com.chozy.server.analysis.dto.UrlAnalyses.UrlAccepted;
 import com.chozy.server.analysis.service.ManualAnalysisService;
+import com.chozy.server.analysis.service.UrlProductResolver;
 import com.chozy.server.common.config.OpenApiContract;
 import com.chozy.server.common.response.ApiResponse;
 import com.chozy.server.common.security.AuthenticatedMember;
@@ -25,12 +28,25 @@ import org.springframework.web.bind.annotation.*;
 @Tag(name = "정밀분석")
 public class ManualAnalysisController {
   private static final String ACCEPTED = "직접 입력 정밀분석 요청이 접수되었습니다.";
+  private static final String URL_ACCEPTED = "상품 정밀분석 요청이 접수되었습니다.";
   private static final String PROGRESS = "정밀분석 진행 상태 조회가 완료되었습니다.";
 
   private final ManualAnalysisService service;
+  private final UrlProductResolver urls;
 
-  public ManualAnalysisController(ManualAnalysisService service) {
+  public ManualAnalysisController(ManualAnalysisService service, UrlProductResolver urls) {
     this.service = service;
+    this.urls = urls;
+  }
+
+  @PostMapping("/search/analyses/url")
+  @ResponseStatus(HttpStatus.ACCEPTED)
+  @Operation(summary = "상품 URL 정밀분석 요청")
+  @OpenApiContract(success = URL_ACCEPTED, errors = {REPORT_LIMIT_EXHAUSTED, REPORT_SLOTS_RESERVED,
+      URL_ANALYSIS_UNAVAILABLE})
+  public ApiResponse<UrlAccepted> submitUrl(@AuthenticationPrincipal AuthenticatedMember member,
+      @Valid @RequestBody SubmitRequest input) {
+    return ApiResponse.success(202, URL_ACCEPTED, service.submitUrl(member, urls.resolveForAnalysis(input)));
   }
 
   @PostMapping("/search/analyses/manual")
