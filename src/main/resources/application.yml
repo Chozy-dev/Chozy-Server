@@ -45,6 +45,21 @@ springdoc:
     enabled: false
     persist-authorization: false
 app:
+  analysis:
+    market:
+      enabled: ${APP_ANALYSIS_MARKET_ENABLED:false}
+      budget-db-url: ${CHOZY_MARKET_BUDGET_DB_URL:}
+      budget-db-username: ${CHOZY_MARKET_BUDGET_DB_USERNAME:}
+      budget-db-password: ${CHOZY_MARKET_BUDGET_DB_PASSWORD:}
+      coupang-account: ${CHOZY_MARKET_COUPANG_ACCOUNT:}
+      naver-account: ${CHOZY_MARKET_NAVER_ACCOUNT:}
+      coupang-access-key: ${COUPANG_ACCESS_KEY:}
+      coupang-secret-key: ${COUPANG_SECRET_KEY:}
+      ad-key: ${NAVER_AD_API_KEY:}
+      ad-secret: ${NAVER_AD_SECRET_KEY:}
+      ad-customer-id: ${NAVER_AD_CUSTOMER_ID:}
+      hub-id: ${NAVER_HUB_KEY_ID:}
+      hub-key: ${NAVER_HUB_KEY:}
   usage:
     free-monthly-report-limit: ${FREE_MONTHLY_REPORT_LIMIT:3}
   security:
