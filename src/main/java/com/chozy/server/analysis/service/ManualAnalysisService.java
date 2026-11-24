@@ -97,7 +97,7 @@ public class ManualAnalysisService {
     var job = jobs.findOwned(id, member.memberId()).orElseThrow(ManualAnalysisService::notFound);
     int step = switch (job.status()) {
       case PENDING -> 0;
-      case PROCESSING, FAILED -> 1;
+      case PROCESSING, FAILED -> job.processingStep() == null ? 1 : job.processingStep();
       case COMPLETED -> TOTAL_STEPS;
     };
     var completedAt = job.completedAt() == null ? null : job.completedAt().atZoneSameInstant(KOREA).toOffsetDateTime();
@@ -109,6 +109,12 @@ public class ManualAnalysisService {
     var now = now();
     jobs.expire(now, "정밀분석 처리 시간이 초과되었습니다. 다시 시도해 주세요.");
     return jobs.claim(now.plusMinutes(5), engine.getIfAvailable() != null, urlEngine.getIfAvailable() != null);
+  }
+
+  @Transactional
+  public void advanceStep(Job job, int step) {
+    if (step < 2 || step >= TOTAL_STEPS) throw new IllegalArgumentException("Invalid processing step");
+    jobs.advanceStep(job.id(), step, now());
   }
 
   @Transactional
