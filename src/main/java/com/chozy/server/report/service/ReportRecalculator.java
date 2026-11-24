@@ -3,6 +3,7 @@ package com.chozy.server.report.service;
 import static com.chozy.server.report.dto.ReportSummary.InvestmentGrade.*;
 
 import com.chozy.server.analysis.dto.AnalysisSource;
+import com.chozy.server.analysis.dto.ManualAnalysisInput;
 import com.chozy.server.report.dto.CoupangCategories.CoupangCategory;
 import com.chozy.server.report.dto.ReportSummary.InvestmentGrade;
 import com.chozy.server.report.repository.ReportRepository.StoredReport;
@@ -12,7 +13,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 
-final class ReportRecalculator {
+public final class ReportRecalculator {
   private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
   private static final BigDecimal FIVE = BigDecimal.valueOf(5);
   private static final String CATEGORY_NOTICE = "중분류에 따라 실제 수수료율이 달라질 수 있어요.";
@@ -24,6 +25,22 @@ final class ReportRecalculator {
 
   static void apply(ObjectNode draft, StoredReport stored, BigDecimal expectedPrice, CoupangCategory category,
       BigDecimal cpc, boolean recalculate, boolean marketChanged) {
+    boolean manual = stored.source() == AnalysisSource.MANUAL;
+    var profit = draft.path("internalDiagnosis").path("profitability");
+    var wholesale = manual ? stored.wholesalePrice() : decimal(profit.path("wholesalePrice"));
+    var shipping = manual ? stored.shippingFee() : decimal(profit.path("shippingFee"));
+    var minimum = manual ? stored.minimumSellingPrice() : decimal(profit.path("minimumSellingPrice"));
+    apply(draft, expectedPrice, category, cpc, recalculate, marketChanged, manual, wholesale, shipping, minimum);
+  }
+
+  public static void initializeManual(ObjectNode draft, ManualAnalysisInput input) {
+    apply(draft, null, null, null, true, true, true,
+        input.wholesalePrice(), input.shippingFee(), input.minimumSellingPrice());
+  }
+
+  private static void apply(ObjectNode draft, BigDecimal expectedPrice, CoupangCategory category, BigDecimal cpc,
+      boolean recalculate, boolean marketChanged, boolean manual, BigDecimal wholesale, BigDecimal shipping,
+      BigDecimal minimum) {
     var profit = draft.withObjectProperty("internalDiagnosis").withObjectProperty("profitability");
     var simulation = draft.withObjectProperty("investmentSimulation");
     var strategy = draft.withObjectProperty("investmentStrategy");
@@ -42,10 +59,6 @@ final class ReportRecalculator {
       profit.put("feeRate", category.feeRate());
     }
 
-    boolean manual = stored.source() == AnalysisSource.MANUAL;
-    var wholesale = manual ? stored.wholesalePrice() : decimal(profit.path("wholesalePrice"));
-    var shipping = manual ? stored.shippingFee() : decimal(profit.path("shippingFee"));
-    var minimum = manual ? stored.minimumSellingPrice() : decimal(profit.path("minimumSellingPrice"));
     var market = decimal(profit.path("marketPrice"));
     var legacyReference = profit.has("marketPrice") ? null : decimal(profit.path("referenceSellingPrice"));
     var reference = first(expectedPrice, market, legacyReference);

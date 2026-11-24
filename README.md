@@ -75,14 +75,15 @@ Collector Compose를 사용하지 않습니다. 아래 명령은 Spring 디렉�
 ```powershell
 $env:CHOZY_DEV_DB_PASSWORD='<개발용 비밀번호>'
 docker compose -f compose.dev.yml up -d --wait
-.\mvnw.cmd spring-boot:run '-Dspring-boot.run.profiles=dbdev'
 # 애플리케이션 종료 후 DB만 중지 (volume 보존)
 docker compose -f compose.dev.yml stop
 # 다시 시작
 docker compose -f compose.dev.yml up -d --wait
 ```
 
-연결: `127.0.0.1:55432`, DB/사용자 `chozy_spring_dev`. IntelliJ Active profiles는 `dbdev`, 환경변수는 `CHOZY_DEV_DB_PASSWORD`입니다. 비밀번호는 기존 volume 초기화 시 정한 값을 계속 사용합니다. 비밀번호 환경변수 변경만으로 기존 DB 비밀번호가 바뀌지는 않습니다. `.env.dbdev`에 저장한 경우 Compose에는 `--env-file .env.dbdev`를 명시하고 Spring에는 별도 환경변수로 주입합니다. 이 파일은 Git에서 제외됩니다.
+JDBC 주소는 `jdbc:postgresql://127.0.0.1:55432/chozy_spring_dev`이고 사용자는 `chozy_spring_dev`입니다. 비밀번호는 기존 volume 초기화 시 정한 값을 계속 사용합니다. 비밀번호 환경변수 변경만으로 기존 DB 비밀번호가 바뀌지는 않습니다. `.env.dbdev`에 저장한 경우 Compose에는 `--env-file .env.dbdev`를 명시하고 Spring에는 별도 환경변수로 주입합니다. 이 파일은 Git에서 제외됩니다.
+
+DB가 이미 실행 중이면 [Spring 기동](#프론트엔드-api-테스트)으로 넘어갑니다. `dbdev`는 기동 시 이 개발 DB에 대기 중인 Flyway 마이그레이션을 적용합니다. 보존할 개발 데이터가 있으면 기동 전 백업을 확보합니다.
 
 ```powershell
 # 기본 회귀: Docker/DB 없이 실행
@@ -151,6 +152,10 @@ Chozy_Server/
 
 ## 프론트엔드 API 테스트
 
+직접 입력 정밀분석을 실제 데이터로 검증하려면 `dbdev` 또는 `database`에서 `APP_ANALYSIS_MARKET_ENABLED=true`와 [.env.example](.env.example)의 시장 분석 설정을 주입합니다. 업무 DB와 별도로 공동 호출 한도 DB에 접속할 전용 Spring 계정이 필요합니다. 계정 식별자는 Collector의 확인된 예산 정책과 일치해야 합니다. [시장 데이터와 호출 한도 계약](docs/BACKEND.md#직접-입력-시장-데이터)
+
+JWT로 `POST /search/analyses/manual`을 호출한 뒤 `GET /search/analyses/{analysisId}/status`에서 완료와 `reportId`를 확인합니다. `GET /search/reports/{reportId}`에서 데이터와 계산 대기 항목을 확인하고, 필요하면 `PATCH /search/reports/{reportId}/inputs`에 `coupangCategoryCode`와 `expectedSellingPrice`를 입력합니다.
+
 Swagger에서 인증·회원·홈·검색·리포트·관심상품·알림 API를 테스트하려면 기존 [격리 개발 DB](#격리-개발-db-실행)를 실행하고 `dbdev`로 Spring을 기동합니다. Swagger를 활성화하는 추가 플래그는 필요 없습니다. DB 없이 실행하는 `dev`에서는 공개 쇼핑인사이트 분야, 쿠팡 대분류·기본 수수료율(`GET /search/coupang-categories`), 지원하지 않는 상품 URL의 직접 입력 안내를 확인할 수 있습니다. 상품·옵션 조회 제공자 또는 정밀분석 엔진이 필요한 요청은 연결 전까지 R003/503을 반환합니다. 리포트 상세·의견·관심상품 등록에는 본인의 저장된 리포트가 필요합니다.
 
 `GET /search/categories`는 로그인 없이 호출할 수 있습니다. `POST /search/screenings`에 Bearer 토큰을 붙이면 성공 결과가 회원 최근 기록에 저장됩니다. 스크리닝과 쇼핑 반응 계산에 필요한 네이버 데이터 연결 전에는 S001/503을 반환합니다.
@@ -169,17 +174,23 @@ Swagger에서 인증·회원·홈·검색·리포트·관심상품·알림 API�
 - Swagger UI [http://localhost:8080/swagger-ui/index.html](http://localhost:8080/swagger-ui/index.html)
 - OpenAPI 3.1 JSON [http://localhost:8080/v3/api-docs](http://localhost:8080/v3/api-docs)
 
-기존 DB 비밀번호와 32바이트 이상 Base64 개발 JWT 키는 환경변수로 전달합니다. 서버를 재시작해도 기존 토큰을 유지하려면 같은 JWT 키를 사용합니다.
+IntelliJ의 Active profiles는 `dbdev`로 지정하고, 기존 DB 비밀번호와 32바이트 이상 Base64 개발 JWT 키를 `CHOZY_DEV_DB_PASSWORD`와 `JWT_SECRET_BASE64`로 주입합니다. 아래 PowerShell 예시는 `.env.dbdev`에 있는 따옴표 없는 `CHOZY_DEV_DB_PASSWORD=값` 항목을 사용합니다. 서버 재시작 후 기존 토큰을 유지하려면 보관한 개발 JWT 키를 다시 주입합니다.
 
 ```powershell
-$env:CHOZY_DEV_DB_PASSWORD='<기존 개발 DB 비밀번호>'
-$env:JWT_SECRET_BASE64='<비밀 저장소에 보관한 개발 JWT 키>'
+$passwordLine = Get-Content -LiteralPath .env.dbdev | Where-Object { $_ -match '^CHOZY_DEV_DB_PASSWORD=' } |
+    Select-Object -First 1
+if (-not $passwordLine) { throw 'CHOZY_DEV_DB_PASSWORD가 .env.dbdev에 없습니다.' }
+$env:CHOZY_DEV_DB_PASSWORD = ($passwordLine -split '=', 2)[1].Trim()
+if (-not $env:JWT_SECRET_BASE64) {
+    $jwtKey = New-Object byte[] 32
+    $random = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try { $random.GetBytes($jwtKey) } finally { $random.Dispose() }
+    $env:JWT_SECRET_BASE64 = [Convert]::ToBase64String($jwtKey)
+}
 # Swagger UI는 같은 origin을 사용합니다. 아래는 별도로 실행하는 프론트엔드용 예시입니다.
 $env:CORS_ALLOWED_ORIGINS='http://localhost:3000,http://localhost:5173'
 .\mvnw.cmd spring-boot:run '-Dspring-boot.run.profiles=dbdev' '-Dspring-boot.run.arguments=--server.address=127.0.0.1'
 ```
-
-첫 실행에 개발 JWT 키가 없다면 32바이트 난수 키를 생성해 개발용 비밀 저장소에서 관리합니다.
 
 1. Swagger의 `POST /auth/signup`과 `POST /auth/login`에서 **Try it out → Execute**를 실행합니다. 사용 중인 개발 계정이 있으면 가입을 생략합니다.
 2. 로그인 응답의 `data.accessToken` 값만 **Authorize → bearerAuth**에 입력합니다. Swagger가 `Authorization: Bearer <accessToken>` 헤더를 붙입니다.
