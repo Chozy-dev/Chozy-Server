@@ -63,7 +63,7 @@ Collector의 `products/product_options/product_history/product_events`는 최신
 
 Spring 사용자/인증/리포트/관심상품/알림/사용량 데이터는 `chozy` 소유다. `db/migration/chozy`와 `chozy.flyway_schema_history`는 Collector Python migration/ledger와 독립적이다. 운영에서는 전용 migration 관리자와 비소유 Spring runtime 로그인을 구분하며 runtime에는 DDL 권한을 주지 않는다. 운영 Flyway 적용은 별도 검증·승인 작업이며 애플리케이션 startup에서는 disabled다. 필요 시 자체 저장과 Collector 조회에 별도 DataSource/계정을 둔다. Collector 관리자 계정을 재사용하지 않는다.
 
-**2026-11-22 문서 기준** 운영에는 stage7_supply_scoring, stage8_operations, stage7_history_policy_v2, stage10_scoring_performance 네 migration이 미적용이다. runtime_budget_guard·runtime 권한 분리·실제 Spring 로그인/DSN 전환도 미완료다. 사본 권한 검증은 운영 적용 완료가 아니다. read_supply_home/reserve_api_call의 원본은 INVOKER이고 access.py의 DEFINER/고정 search_path 권한 계획은 운영 미적용이다. EXECUTE만 부여하면 충분하다고 가정하거나 관리자 계정으로 우회하지 않는다. 1,500만 성능·용량과 지속 수집 SLA도 미검증이다.
+Collector 운영 DB의 함수 실행 권한은 `access.py`의 SECURITY DEFINER 및 고정 `search_path` 권한 계획을 따른다. Spring은 별도 비소유 로그인으로 예약·차단 함수를 실행하고 예산 테이블을 직접 수정할 권한을 갖지 않는다. 적용 및 연결 상태는 [CONTEXT](CONTEXT.md#개발-순서)를 따른다.
 
 실시간 요청 호출은 정기 발행 조회와 별개다. 실제 계정/API별 공동 `reserve_api_call`/차단 계약과 권한을 먼저 확인한다. 로컬 카운터로 대체하거나 usage 초기화/차단 해제로 우회하지 않는다. 주소·인증·요청/응답 계약이 미정인 Collector HTTP/AI 클라이언트와 외부 설정 bean은 미리 만들지 않았다. 계약 확정 시 `@ConfigurationProperties`+검증, 환경변수 비밀값 주입, timeout/오류 매핑을 통합 경계에 추가한다.
 
