@@ -152,9 +152,13 @@ Chozy_Server/
 
 ## 프론트엔드 API 테스트
 
-직접 입력 정밀분석을 실제 데이터로 검증하려면 `dbdev` 또는 `database`에서 `APP_ANALYSIS_MARKET_ENABLED=true`와 [.env.example](.env.example)의 시장 분석 설정을 주입합니다. 업무 DB와 별도로 공동 호출 한도 DB에 접속할 전용 Spring 계정이 필요합니다. 계정 식별자는 Collector의 확인된 예산 정책과 일치해야 합니다. [시장 데이터와 호출 한도 계약](docs/BACKEND.md#직접-입력-시장-데이터)
+### 직접 입력 정밀분석 실데이터 검증
 
-JWT로 `POST /search/analyses/manual`을 호출한 뒤 `GET /search/analyses/{analysisId}/status`에서 완료와 `reportId`를 확인합니다. `GET /search/reports/{reportId}`에서 데이터와 계산 대기 항목을 확인하고, 필요하면 `PATCH /search/reports/{reportId}/inputs`에 `coupangCategoryCode`와 `expectedSellingPrice`를 입력합니다.
+1. `dbdev` 또는 `database`의 Spring 업무 DB에 Flyway V12가 적용됐는지 확인합니다. 공동 호출 한도 DB는 전용 Spring 로그인으로 접속하고, `reserve_api_call(text,text,boolean)`과 `block_api_account(text,text)`의 실행 권한을 확인합니다. 쿠팡 `default`, 네이버 `ad`·`trend`의 계정 식별자, 남은 예산, 호출 간격을 Collector 정책과 대조합니다. 대기 중인 분석이 없는 검증 환경에서 `APP_ANALYSIS_MARKET_ENABLED=true`와 [.env.example](.env.example)의 시장 분석 설정을 주입합니다. [시장 데이터와 호출 한도 계약](docs/BACKEND.md#직접-입력-시장-데이터)
+2. 테스트 회원의 `GET /home/report-usage`를 기록한 뒤 JWT로 `POST /search/analyses/manual`을 한 건 호출합니다. `GET /search/analyses/{analysisId}/status`에서 처리 중 단계는 조회 시점에 따라 건너뛸 수 있습니다. 완료 응답에서 단계 `7`과 `reportId`를 확인합니다. 실패하면 마지막 단계와 공동 정책 상태를 기록하고, 원인을 해결한 뒤 재시도합니다.
+3. `GET /search/reports/{reportId}`에서 작업 ID, 시장 표본·트렌드, 계산 대기 항목을 확인합니다. 필요하면 `PATCH /search/reports/{reportId}/inputs`에 `coupangCategoryCode`와 `expectedSellingPrice`를 입력합니다. 사용량을 다시 조회해 성공 시 1회 차감됐는지, 조회·추가 입력으로 차감이 늘지 않는지 확인합니다. 데이터랩 일일 예산 소진 시에는 트렌드·지속성이 빠지고 사용량이 유지되어야 합니다. 소진과 공급처 제한 응답의 재현은 격리 테스트에서 수행합니다.
+
+### Swagger에서 개발 API 테스트
 
 Swagger에서 인증·회원·홈·검색·리포트·관심상품·알림 API를 테스트하려면 기존 [격리 개발 DB](#격리-개발-db-실행)를 실행하고 `dbdev`로 Spring을 기동합니다. Swagger를 활성화하는 추가 플래그는 필요 없습니다. DB 없이 실행하는 `dev`에서는 공개 쇼핑인사이트 분야, 쿠팡 대분류·기본 수수료율(`GET /search/coupang-categories`), 지원하지 않는 상품 URL의 직접 입력 안내를 확인할 수 있습니다. 상품·옵션 조회 제공자 또는 정밀분석 엔진이 필요한 요청은 연결 전까지 R003/503을 반환합니다. 리포트 상세·의견·관심상품 등록에는 본인의 저장된 리포트가 필요합니다.
 
