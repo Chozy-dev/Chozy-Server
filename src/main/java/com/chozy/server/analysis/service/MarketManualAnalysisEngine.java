@@ -16,9 +16,12 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.IntConsumer;
 
 final class MarketManualAnalysisEngine implements ManualAnalysisEngine {
   private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+  private static final int ANALYSIS_KEYWORD_STEP = 4;
+  private static final int MARKET_DATA_STEP = 5;
   private final MarketApiClient client;
   private final ObjectMapper mapper;
   private final Clock clock;
@@ -31,12 +34,18 @@ final class MarketManualAnalysisEngine implements ManualAnalysisEngine {
 
   @Override
   public Result analyze(long analysisId, ManualAnalysisInput input) {
+    return analyze(analysisId, input, step -> {});
+  }
+
+  @Override
+  public Result analyze(long analysisId, ManualAnalysisInput input, IntConsumer progress) {
     var report = mapper.createObjectNode();
     var summary = report.putObject("summary");
     var external = report.putObject("externalDiagnosis");
     var strategy = report.putObject("investmentStrategy");
     var profit = report.putObject("internalDiagnosis").putObject("profitability");
     String original = input.keyword() == null ? input.productName() : input.keyword();
+    progress.accept(ANALYSIS_KEYWORD_STEP);
     var keywords = keywords(client.keywords(original));
     var selected = select(original, input.productName(), keywords);
     String keyword = selected == null ? original : selected.name();
@@ -49,6 +58,7 @@ final class MarketManualAnalysisEngine implements ManualAnalysisEngine {
           .put("averageAdDepth", selected.adDepth()).put("isSearchCountEstimated", false);
     }
 
+    progress.accept(MARKET_DATA_STEP);
     String marketQuery = input.productName();
     var rows = client.products(marketQuery);
     if (rows.isEmpty() && !normalize(marketQuery).equals(normalize(keyword))) {

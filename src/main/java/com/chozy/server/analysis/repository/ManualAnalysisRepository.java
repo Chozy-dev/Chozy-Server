@@ -83,6 +83,14 @@ public class ManualAnalysisRepository {
         """).param("id", id).param("now", now).update() == 1;
   }
 
+  public void advanceStep(long id, int step, OffsetDateTime now) {
+    jdbc.sql("""
+        UPDATE chozy.manual_analysis_jobs SET processing_step = :step
+        WHERE id = :id AND status = 'PROCESSING' AND lease_until > :now
+          AND COALESCE(processing_step, 1) < :step
+        """).param("id", id).param("step", step).param("now", now).update();
+  }
+
   public void fail(long id, OffsetDateTime now, String message) {
     jdbc.sql("""
         UPDATE chozy.manual_analysis_jobs
@@ -120,10 +128,11 @@ public class ManualAnalysisRepository {
           row.getString("selected_option_id"));
     }
     return new Job(row.getLong("id"), row.getLong("member_id"), input, urlInput,
-        AnalysisStatus.valueOf(row.getString("status")), row.getObject("report_id", Long.class),
+        AnalysisStatus.valueOf(row.getString("status")), row.getObject("processing_step", Integer.class),
+        row.getObject("report_id", Long.class),
         row.getObject("completed_at", OffsetDateTime.class), row.getString("error_message"));
   }
 
   public record Job(long id, long memberId, ManualAnalysisInput input, UrlInput urlInput, AnalysisStatus status,
-                    Long reportId, OffsetDateTime completedAt, String errorMessage) {}
+                    Integer processingStep, Long reportId, OffsetDateTime completedAt, String errorMessage) {}
 }

@@ -44,7 +44,8 @@ class ManualAnalysisDatabaseIT extends AccountPostgresITSupport {
     assertThat(usage.current(owner.id()).usedCount()).isZero();
 
     mvc.perform(get(STATUS, id).header("Authorization", owner.bearer()))
-        .andExpect(status().isOk()).andExpect(jsonPath("$.data.analysisStatus").value("PENDING"));
+        .andExpect(status().isOk()).andExpect(jsonPath("$.data.analysisStatus").value("PENDING"))
+        .andExpect(jsonPath("$.data.currentStep").value(0));
     mvc.perform(get(STATUS, id).header("Authorization", other.bearer())).andExpect(status().isNotFound());
 
     worker.runNext();
@@ -70,6 +71,7 @@ class ManualAnalysisDatabaseIT extends AccountPostgresITSupport {
     worker.runNext();
     mvc.perform(get(STATUS, failed).header("Authorization", owner.bearer()))
         .andExpect(status().isOk()).andExpect(jsonPath("$.data.analysisStatus").value("FAILED"))
+        .andExpect(jsonPath("$.data.currentStep").value(5))
         .andExpect(jsonPath("$.data.reportId").isEmpty());
     long exempt = accepted(owner, withKeyword("EXEMPT"));
     worker.runNext();
@@ -101,13 +103,21 @@ class ManualAnalysisDatabaseIT extends AccountPostgresITSupport {
     }
     var claimed = service.claim().orElseThrow();
     mvc.perform(get(STATUS, claimed.id()).header("Authorization", owner.bearer()))
-        .andExpect(status().isOk()).andExpect(jsonPath("$.data.analysisStatus").value("PROCESSING"));
+        .andExpect(status().isOk()).andExpect(jsonPath("$.data.analysisStatus").value("PROCESSING"))
+        .andExpect(jsonPath("$.data.currentStep").value(1));
+    service.advanceStep(claimed, 5);
+    service.advanceStep(claimed, 4);
+    mvc.perform(get(STATUS, claimed.id()).header("Authorization", owner.bearer()))
+        .andExpect(status().isOk()).andExpect(jsonPath("$.data.currentStep").value(5))
+        .andExpect(jsonPath("$.data.reportId").isEmpty());
     clock.set("2026-11-23T01:05:01Z");
+    service.advanceStep(claimed, 6);
     worker.runNext();
     service.complete(claimed, new ManualAnalysisEngine.Result(
         mapper.createObjectNode().put("stale", true), false));
     mvc.perform(get(STATUS, claimed.id()).header("Authorization", owner.bearer()))
-        .andExpect(status().isOk()).andExpect(jsonPath("$.data.analysisStatus").value("FAILED"));
+        .andExpect(status().isOk()).andExpect(jsonPath("$.data.analysisStatus").value("FAILED"))
+        .andExpect(jsonPath("$.data.currentStep").value(5));
     assertThat(usage.current(owner.id()).usedCount()).isZero();
     accepted(owner, INPUT);
     worker.runNext();

@@ -36,7 +36,7 @@ public class ManualAnalysisWorker {
     if (claimed.isEmpty()) return;
     var job = claimed.get();
     try {
-      var result = job.urlInput() == null ? engine.analyze(job.id(), job.input())
+      var result = job.urlInput() == null ? engine.analyze(job.id(), job.input(), step -> service.advanceStep(job, step))
           : urlEngine.analyze(job.id(), job.urlInput());
       service.complete(job, result);
     } catch (ReportQuotaExceededException ex) {

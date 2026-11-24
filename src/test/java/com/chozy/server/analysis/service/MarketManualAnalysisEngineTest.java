@@ -22,6 +22,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -102,7 +103,9 @@ class MarketManualAnalysisEngineTest {
         .thenReturn("reserved");
     server.expect(requestTo(TREND_URL)).andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS));
 
-    assertThatThrownBy(() -> engine.analyze(1, INPUT)).isInstanceOf(IllegalStateException.class);
+    var steps = new ArrayList<Integer>();
+    assertThatThrownBy(() -> engine.analyze(1, INPUT, steps::add)).isInstanceOf(IllegalStateException.class);
+    assertThat(steps).containsExactly(4, 5);
     verify(jdbc).queryForObject("SELECT public.block_api_account(?, ?)", String.class, "naver", "trend");
     server.verify();
   }

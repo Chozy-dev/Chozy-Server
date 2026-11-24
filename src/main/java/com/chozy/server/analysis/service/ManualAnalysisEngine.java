@@ -2,6 +2,7 @@ package com.chozy.server.analysis.service;
 
 import com.chozy.server.analysis.dto.ManualAnalysisInput;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.util.function.IntConsumer;
 
 /** Integration boundary for the market analysis and report calculations. */
 public interface ManualAnalysisEngine {
@@ -11,6 +12,11 @@ public interface ManualAnalysisEngine {
    * Only authoritative shared DataLab-budget exhaustion permits an exempt result.
    */
   Result analyze(long analysisId, ManualAnalysisInput input);
+
+  /** Reports entry into implemented intermediate steps (2–6) in the analysis workflow. */
+  default Result analyze(long analysisId, ManualAnalysisInput input, IntConsumer progress) {
+    return analyze(analysisId, input);
+  }
 
   record Result(ObjectNode snapshot, boolean dataLabQuotaExhausted) {}
 }
