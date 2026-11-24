@@ -154,9 +154,44 @@ Chozy_Server/
 
 ### 직접 입력 정밀분석 실데이터 검증
 
-1. `dbdev` 또는 `database`의 Spring 업무 DB에 Flyway V12가 적용됐는지 확인합니다. 공동 호출 한도 DB는 전용 Spring 로그인으로 접속하고, `reserve_api_call(text,text,boolean)`과 `block_api_account(text,text)`의 실행 권한을 확인합니다. 쿠팡 `default`, 네이버 `ad`·`trend`의 계정 식별자, 남은 예산, 호출 간격을 Collector 정책과 대조합니다. 대기 중인 분석이 없는 검증 환경에서 `APP_ANALYSIS_MARKET_ENABLED=true`와 [.env.example](.env.example)의 시장 분석 설정을 주입합니다. [시장 데이터와 호출 한도 계약](docs/BACKEND.md#직접-입력-시장-데이터)
-2. 테스트 회원의 `GET /home/report-usage`를 기록한 뒤 JWT로 `POST /search/analyses/manual`을 한 건 호출합니다. `GET /search/analyses/{analysisId}/status`에서 처리 중 단계는 조회 시점에 따라 건너뛸 수 있습니다. 완료 응답에서 단계 `7`과 `reportId`를 확인합니다. 실패하면 마지막 단계와 공동 정책 상태를 기록하고, 원인을 해결한 뒤 재시도합니다.
-3. `GET /search/reports/{reportId}`에서 작업 ID, 시장 표본·트렌드, 계산 대기 항목을 확인합니다. 필요하면 `PATCH /search/reports/{reportId}/inputs`에 `coupangCategoryCode`와 `expectedSellingPrice`를 입력합니다. 사용량을 다시 조회해 성공 시 1회 차감됐는지, 조회·추가 입력으로 차감이 늘지 않는지 확인합니다. 데이터랩 일일 예산 소진 시에는 트렌드·지속성이 빠지고 사용량이 유지되어야 합니다. 소진과 공급처 제한 응답의 재현은 격리 테스트에서 수행합니다.
+#### 활성화 전 확인
+
+1. 검증 전용 Spring 업무 DB에서 Flyway V12 적용을 확인합니다. `dbdev`는 기동 시 개발 DB에 대기 중인 migration을 적용합니다. `database`를 사용하면 대상 DB의 적용 이력을 미리 확인합니다. 시장 분석 워커는 활성화되면 기존 작업도 가져갈 수 있으므로 `chozy.manual_analysis_jobs`에 `PENDING`·`PROCESSING` 작업이 없고 검증 중 신규 접수가 테스트 회원으로 제한되는 환경을 사용합니다.
+2. 승인된 공동 호출 한도 DB에 **Spring 전용 로그인**으로 접속합니다. 아래 조회로 대상 DB, 로그인과 두 함수의 접근 권한을 확인합니다. 두 행 모두 함수가 존재하고 `public_schema_usage`·`can_execute`가 `true`여야 합니다. 함수 실행 권한 확인에는 실제 예약이나 차단 호출이 필요하지 않습니다.
+
+   ```sql
+   SELECT current_database(), session_user;
+
+   WITH budget_functions(signature) AS (
+     VALUES ('public.reserve_api_call(text,text,boolean)'),
+            ('public.block_api_account(text,text)')
+   )
+   SELECT signature,
+          to_regprocedure(signature) IS NOT NULL AS function_exists,
+          has_schema_privilege(session_user, 'public', 'USAGE') AS public_schema_usage,
+          coalesce(has_function_privilege(session_user, to_regprocedure(signature), 'EXECUTE'), false)
+            AS can_execute
+   FROM budget_functions;
+   ```
+3. 공동 예산 운영자가 최소 권한 적용 상태와 쿠팡 `default`, 네이버 `ad`·`trend`의 실제 계정 매핑, 공유 연동 상태(`platform_integrated`), 차단 상태, 현재 구간의 남은 예산과 호출 간격을 확인합니다. 캐시가 비어 있으면 한 건에 쿠팡 최대 2회, 네이버 검색광고 1회, 데이터랩 월간·일간 각 1회의 HTTP 호출이 발생할 수 있습니다. 간격 제한이 걸리면 엔진은 1초씩 기다리며 예약을 최대 두 번 더 시도합니다. [시장 데이터와 호출 한도 계약](docs/BACKEND.md#직접-입력-시장-데이터)
+4. 위 조건을 확인한 후 [.env.example](.env.example)의 시장 분석 설정과 `APP_ANALYSIS_MARKET_ENABLED=true`를 검증 인스턴스에 주입합니다. Spring Boot는 환경 파일을 자동으로 읽지 않습니다. 기동 성공은 설정 바인딩 확인이며, 공동 예산 DB와 공급처 연동은 실제 작업에서 확인합니다.
+
+#### 한 건 실행과 판정
+
+1. 테스트 회원의 JWT로 `GET /home/report-usage`를 조회해 `period`, `usedCount`, `remainingCount`를 기록합니다. 같은 집계 기간에 전후를 비교할 수 있고 잔여 사용량이 있는 회원으로 `POST /search/analyses/manual`을 한 번 요청합니다. 아래는 요청 형식 예시입니다. 실제 검증에는 시장 데이터가 나올 것으로 예상하는 상품을 선택합니다.
+
+   ```json
+   {
+     "productName": "스테인리스 텀블러 500ml",
+     "wholesalePrice": 8000,
+     "shippingFee": 3000,
+     "hasPricePolicy": false,
+     "keyword": "텀블러"
+   }
+   ```
+2. HTTP 202와 `data.analysisId`를 확인하고 `GET /search/analyses/{analysisId}/status`를 조회합니다. 대기 0, 작업 시작 1, 키워드 조회 4, 시장 데이터 조회 5는 조회 시점에 따라 건너뛸 수 있습니다. 완료는 `COMPLETED`, `currentStep: 7`, `reportId`로 확인합니다. `FAILED`이면 작업 ID, 마지막 단계, 실패 시각과 공동 정책 상태를 기록하고 원인을 확인한 뒤 새 요청 여부를 결정합니다.
+3. `GET /search/reports/{reportId}`에서 작업 ID, 시장 표본과 시장가, 네이버 트렌드, 계산 대기나 결측 안내를 확인합니다. 필요하면 `PATCH /search/reports/{reportId}/inputs`로 `coupangCategoryCode`와 시장가가 없을 때의 `expectedSellingPrice`를 입력합니다. 정상 완료 시 `usedCount`는 1 증가하고 `remainingCount`는 1 감소해야 합니다. 재조회·추가 입력 후에도 그 값이 유지되는지 확인합니다. 데이터랩 일일 예산 소진으로 트렌드·지속성이 제외된 완료 건과 실패 건은 사용량이 유지돼야 합니다. 소진과 공급처 제한 응답은 격리 회귀에서 재현합니다.
+4. 공동 예산 운영자와 실행 전후의 계정·API별 예약량을 같은 집계 구간에서 대조합니다. 처음 띄운 검증 인스턴스에서 정상 수행했다면 쿠팡 `default` 1~2회, 네이버 `ad` 1회와 `trend` 2회가 예상됩니다. 다른 작업의 동시 예약이나 구간 경계가 섞이면 시각과 집계 구간을 함께 기록합니다. 검증 기록에는 요청 시각, 작업·리포트 ID, 예약량과 차감량을 남깁니다.
 
 ### Swagger에서 개발 API 테스트
 
