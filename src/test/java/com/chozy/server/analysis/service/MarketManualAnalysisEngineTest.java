@@ -24,6 +24,8 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -35,6 +37,9 @@ class MarketManualAnalysisEngineTest {
   private static final ManualAnalysisInput INPUT = new ManualAnalysisInput("캠핑 랜턴 5000mAh",
       BigDecimal.valueOf(8000), BigDecimal.valueOf(3000), false, null, "캠핑 랜턴");
   private static final String TREND_URL = "https://naverapihub.apigw.ntruss.com/search-trend/v1/search";
+  private static final String COUPANG_URL =
+      "https://api-gateway.coupang.com/v2/providers/affiliate_open_api/apis/openapi/products/search"
+          + "?keyword=%EC%BA%A0%ED%95%91%20%EB%9E%9C%ED%84%B4%205000mAh&limit=10";
 
   private final ObjectMapper mapper = new ObjectMapper();
   private final JdbcTemplate jdbc = mock(JdbcTemplate.class);
@@ -110,7 +115,43 @@ class MarketManualAnalysisEngineTest {
     server.verify();
   }
 
-  private void expectMarketData() {
+  @ParameterizedTest
+  @EnumSource(value = HttpStatus.class, names = {"SERVICE_UNAVAILABLE", "TOO_MANY_REQUESTS"})
+  void preservesReportWithManualPriceInputWhenCoupangSearchFails(HttpStatus status) {
+    expectKeywordData();
+    server.expect(requestTo(COUPANG_URL)).andRespond(withStatus(status));
+    when(jdbc.queryForObject(startsWith("SELECT CASE"), eq(String.class), eq("naver"), eq("trend")))
+        .thenReturn("reserved");
+    server.expect(requestTo(TREND_URL))
+        .andRespond(withSuccess("{\"results\":[{\"data\":[]}]}", MediaType.APPLICATION_JSON));
+    server.expect(requestTo(TREND_URL))
+        .andRespond(withSuccess("{\"results\":[{\"data\":[]}]}", MediaType.APPLICATION_JSON));
+
+    var result = engine.analyze(1, INPUT);
+    assertThat(result.dataLabQuotaExhausted()).isFalse();
+    assertThat(result.snapshot().at("/internalDiagnosis/profitability/marketPrice").isNull()).isTrue();
+    assertThat(result.snapshot().at("/summary/scoreStatus").textValue()).isEqualTo("WAITING_FOR_INPUT");
+    assertThat(result.snapshot().at("/summary/requiredInputs").toString())
+        .isEqualTo("[\"EXPECTED_SELLING_PRICE\",\"COUPANG_CATEGORY\"]");
+    assertThat(result.snapshot().at("/externalDiagnosis/competitionScore").intValue()).isEqualTo(80);
+    if (status == HttpStatus.TOO_MANY_REQUESTS) {
+      verify(jdbc).queryForObject("SELECT public.block_api_account(?, ?)", String.class, "coupang", "default");
+    }
+    server.verify();
+  }
+
+  @Test
+  void rejectsAnalysisBeforeCoupangRequestWhenBudgetGuardIsUnavailable() {
+    expectKeywordData();
+    when(jdbc.queryForObject(startsWith("SELECT CASE"), eq(String.class), eq("coupang"), eq("default")))
+        .thenReturn("runtime_budget_guard_missing");
+
+    assertThatThrownBy(() -> engine.analyze(1, INPUT))
+        .isInstanceOf(IllegalStateException.class).hasMessage("Market call budget unavailable");
+    server.verify();
+  }
+
+  private void expectKeywordData() {
     when(jdbc.queryForObject(startsWith("SELECT CASE"), eq(String.class), eq("naver"), eq("ad")))
         .thenReturn("reserved");
     when(jdbc.queryForObject(startsWith("SELECT CASE"), eq(String.class), eq("coupang"), eq("default")))
@@ -121,8 +162,11 @@ class MarketManualAnalysisEngineTest {
         .andRespond(withSuccess("""
             {"keywordList":[{"relKeyword":"캠핑랜턴","monthlyPcQcCnt":500,"monthlyMobileQcCnt":1100,"compIdx":"낮음"}]}
             """, MediaType.APPLICATION_JSON));
-    server.expect(requestTo("https://api-gateway.coupang.com/v2/providers/affiliate_open_api/apis/openapi/products/search"
-            + "?keyword=%EC%BA%A0%ED%95%91%20%EB%9E%9C%ED%84%B4%205000mAh&limit=10"))
+  }
+
+  private void expectMarketData() {
+    expectKeywordData();
+    server.expect(requestTo(COUPANG_URL))
         .andRespond(withSuccess("""
             {"rCode":"0","data":{"productData":[
               {"productId":1,"productName":"랜턴 5,000mAh","productPrice":20000,"isRocket":false,"isFreeShipping":false},

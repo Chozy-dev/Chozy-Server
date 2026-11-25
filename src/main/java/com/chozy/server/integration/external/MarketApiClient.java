@@ -23,6 +23,7 @@ import javax.crypto.spec.SecretKeySpec;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 public final class MarketApiClient {
   private static final String COUPANG_SEARCH = "/v2/providers/affiliate_open_api/apis/openapi/products/search";
@@ -71,12 +72,16 @@ public final class MarketApiClient {
       String signature = HexFormat.of().formatHex(sign(coupangSecret, date + "GET" + COUPANG_SEARCH + query));
       String auth = "CEA algorithm=HmacSHA256,access-key=" + coupangAccess + ",signed-date=" + date
           + ",signature=" + signature;
-      var response = request(http.get().uri(URI.create("https://api-gateway.coupang.com" + COUPANG_SEARCH + "?" + query))
-          .header("Authorization", auth), coupangAccount, "default");
-      String code = response.path("rCode").asText();
-      if ("403".equals(code) || "429".equals(code)) block(coupangAccount, "default");
-      if (!"0".equals(code)) throw new IllegalStateException("Coupang search response failed");
-      return requireArray(response.path("data").path("productData"));
+      try {
+        var response = request(http.get().uri(URI.create("https://api-gateway.coupang.com" + COUPANG_SEARCH + "?" + query))
+            .header("Authorization", auth), coupangAccount, "default");
+        String code = response.path("rCode").asText();
+        if ("403".equals(code) || "429".equals(code)) block(coupangAccount, "default");
+        if (!"0".equals(code)) throw new ProviderResponseException("Coupang search response failed");
+        return requireArray(response.path("data").path("productData"));
+      } catch (ProviderResponseException | RestClientException ex) {
+        throw new CoupangSearchUnavailable(ex);
+      }
     });
   }
 
@@ -113,9 +118,9 @@ public final class MarketApiClient {
     return request.exchange((sent, response) -> {
       int status = response.getStatusCode().value();
       if (status == 403 || status == 429) block(account, api);
-      if (status != 200) throw new IllegalStateException("Market API HTTP status " + status);
+      if (status != 200) throw new ProviderResponseException("Market API HTTP status " + status);
       var body = response.bodyTo(JsonNode.class);
-      if (body == null || !body.isObject()) throw new IllegalStateException("Invalid market API response");
+      if (body == null || !body.isObject()) throw new ProviderResponseException("Invalid market API response");
       return body;
     });
   }
@@ -144,7 +149,7 @@ public final class MarketApiClient {
 
   private void block(String account, String api) {
     budgets.queryForObject("SELECT public.block_api_account(?, ?)", String.class, account, api);
-    throw new IllegalStateException("Market API access restricted");
+    throw new ProviderResponseException("Market API access restricted");
   }
 
   private JsonNode cached(String key, Supplier<JsonNode> loader) {
@@ -161,7 +166,7 @@ public final class MarketApiClient {
   }
 
   private static JsonNode requireArray(JsonNode node) {
-    if (!node.isArray()) throw new IllegalStateException("Invalid market API response data");
+    if (!node.isArray()) throw new ProviderResponseException("Invalid market API response data");
     return node;
   }
 
@@ -180,6 +185,18 @@ public final class MarketApiClient {
   }
 
   private record CachedResponse(JsonNode body, Instant expiresAt) {}
+
+  private static final class ProviderResponseException extends IllegalStateException {
+    ProviderResponseException(String message) {
+      super(message);
+    }
+  }
+
+  public static final class CoupangSearchUnavailable extends IllegalStateException {
+    private CoupangSearchUnavailable(RuntimeException cause) {
+      super("Coupang search is unavailable", cause);
+    }
+  }
 
   public static final class DataLabDailyLimit extends RuntimeException {}
 }

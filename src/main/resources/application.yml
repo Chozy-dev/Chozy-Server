@@ -45,6 +45,12 @@ springdoc:
     enabled: false
     persist-authorization: false
 app:
+  home:
+    recommendations:
+      enabled: ${APP_HOME_RECOMMENDATIONS_ENABLED:false}
+      db-url: ${CHOZY_RECOMMENDATIONS_DB_URL:}
+      db-username: ${CHOZY_RECOMMENDATIONS_DB_USERNAME:}
+      db-password: ${CHOZY_RECOMMENDATIONS_DB_PASSWORD:}
   analysis:
     market:
       enabled: ${APP_ANALYSIS_MARKET_ENABLED:false}
