@@ -60,13 +60,24 @@ final class MarketManualAnalysisEngine implements ManualAnalysisEngine {
 
     progress.accept(MARKET_DATA_STEP);
     String marketQuery = input.productName();
-    var rows = client.products(marketQuery);
-    if (rows.isEmpty() && !normalize(marketQuery).equals(normalize(keyword))) {
-      marketQuery = keyword;
+    JsonNode rows;
+    boolean searchFailed = false;
+    try {
       rows = client.products(marketQuery);
+      if (rows.isEmpty() && !normalize(marketQuery).equals(normalize(keyword))) {
+        marketQuery = keyword;
+        rows = client.products(marketQuery);
+      }
+    } catch (MarketApiClient.CoupangSearchUnavailable ex) {
+      searchFailed = true;
+      rows = mapper.createArrayNode();
     }
     var market = CoupangMarketPrice.analyze(rows, input.productName(), input.shippingFee());
-    market.describe(strategy.putObject("priceCompetitiveness"), marketQuery);
+    var priceCompetitiveness = strategy.putObject("priceCompetitiveness");
+    market.describe(priceCompetitiveness, marketQuery);
+    if (searchFailed) {
+      priceCompetitiveness.put("notice", "쿠팡에서 시장가를 조회하지 못했어요. 예상 판매가를 입력해 주세요.");
+    }
     profit.put("marketPrice", market.marketPrice());
     var rocketRatio = market.comparisonCount() == 0 ? null
         : BigDecimal.valueOf(100L * market.rocketCount())

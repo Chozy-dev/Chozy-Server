@@ -23,7 +23,7 @@ public class RecommendedProductService {
       throw new BusinessException(RECOMMENDATIONS_UNAVAILABLE);
     }
     return reader.latest(source, size)
-        .map(publication -> new RecommendedProducts(publication.asOf(), publication.items()))
+        .map(publication -> new RecommendedProducts(publication.updatedAt(), publication.items()))
         .orElseGet(() -> new RecommendedProducts(null, List.of()));
   }
 }

@@ -7,7 +7,7 @@ import java.util.List;
 
 public record RecommendedProducts(
     @Schema(types = {"string", "null"}, format = "date-time",
-        description = "완료 발행본의 기준 시각. 완료 발행본이 없으면 null")
+        description = "완료 발행본의 갱신 시각. 완료 발행본이 없으면 null")
     OffsetDateTime updatedAt,
     List<RecommendedProduct> items) {
   public enum Source {

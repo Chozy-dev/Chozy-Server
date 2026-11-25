@@ -199,7 +199,7 @@ Swagger에서 인증·회원·홈·검색·리포트·관심상품·알림 API�
 
 `GET /search/categories`는 로그인 없이 호출할 수 있습니다. `POST /search/screenings`에 Bearer 토큰을 붙이면 성공 결과가 회원 최근 기록에 저장됩니다. 스크리닝과 쇼핑 반응 계산에 필요한 네이버 데이터 연결 전에는 S001/503을 반환합니다.
 
-`GET /home/products/recommended?source=DOMEME`는 로그인 없이 호출할 수 있습니다. 소싱처는 `DOMEME`, `OWNERCLAN` 중 하나이며 `size`를 생략하면 10개까지 요청합니다. `dev` Swagger에도 표시되며 실제 발행본 조회를 연결하기 전에는 H001/503을 반환합니다.
+`GET /home/products/recommended?source=DOMEME`는 로그인 없이 호출할 수 있습니다. 소싱처는 `DOMEME`, `OWNERCLAN` 중 하나이며 `size`를 생략하면 10개까지 요청합니다. `dbdev` 또는 `database`에서 [.env.example](.env.example)의 추천 조회 설정과 `APP_HOME_RECOMMENDATIONS_ENABLED=true`를 주입하면 Collector의 최신 완료 발행본을 읽습니다. Collector DB 로그인에는 `public.read_supply_home(text, integer)` 실행 권한이 필요합니다. 설정 전에는 H001/503을 반환합니다.
 
 `GET /home/keywords/coupang`은 로그인 없이 호출할 수 있습니다. `categoryId`를 생략하면 최신 완료 발행본에서 ID가 가장 작은 카테고리를 선택합니다. `dev` Swagger에도 표시되며 실제 발행본 조회를 연결하기 전에는 H002/503을 반환합니다.
 

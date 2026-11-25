@@ -57,7 +57,7 @@ API를 구현할 때 **HTTP 메서드 + 정확한 경로**를 SecurityConfigurat
 
 Collector의 `products/product_options/product_history/product_events`는 최신 상태/옵션/실제 변경 관측/출처 있는 사건이며 Spring 소유가 아니다. 점수 큐·산식·수집·완료 증표·발행은 Collector 책임이다. Spring에서 점수 산식을 복사하거나 홈 점수를 재계산하지 않는다. NULL/미확인/0을 구분하고 DOMEME/OWNERCLAN을 합쳐 순위 매기지 않는다.
 
-완료 추천은 검토된 스키마의 SQL `read_supply_home(source,size)`를 우선 사용한다(size 1~1000, source DOMEME/OWNERCLAN). JSONB의 완료 batchId/asOf/formulaVersion/items를 보존하고 products 현재값과 재결합하지 않는다. 완료본 없음(SQL NULL)과 완료본의 빈 items를 구분한다.
+공급 추천은 검토된 스키마의 SQL `public.read_supply_home(source,size)`로 읽는다(size 1~1000, source DOMEME/OWNERCLAN). 발행본의 `updatedAt`과 순위순 `items`를 응답에 사용한다. 완료본 없음(SQL NULL)과 완료본의 빈 items를 구분한다. 접속 또는 응답 해석 실패는 H001/503이다.
 
 쿠팡은 `coupang_API/persistence/best.py:read_published`, 네이버는 `naver_API/queries.py:read_published/read_compare`가 실제 조회 계약이다. Python 함수는 Spring에서 직접 호출할 HTTP 서버가 아니다. 향후 해당 SQL 의미를 JDBC로 구현하고 필요한 읽기 권한을 별도 확인한다. 한 SQL로 최신 완료 배치 전체를 고르고 선택 카테고리/테마가 없다고 과거 데이터를 섞지 않는다. 비교는 네이버와 같은 날짜의 완료 쿠팡만 사용한다. 현재 쿠팡/네이버 Spring runtime 권한은 확정되지 않았다.
 
@@ -256,7 +256,7 @@ DB 프로필에서 JWT로 `POST /search/analyses/manual`과 `GET /search/analyse
 
 - opt-in 엔진은 검색광고 `RelKwdStat`에서 키워드와 경쟁 지표를 읽고 쿠팡 파트너스 상품 검색을 사용한다. 시장가는 상품명을 먼저 조회하고 결과가 비면 분석 키워드를 시도한다. 규격·묶음·배송 조건·이상치를 반영한 중앙값과 표본 경고를 저장한다. 데이터랩 일간 56일과 다년 완결 월로 추세·지속성을 계산한다. [검색광고 API](https://naver.github.io/searchad-apidoc/) · [데이터랩 검색어 트렌드 API](https://api.ncloud-docs.com/docs/naver-api-hub-search-trend)
 - 초기 리포트와 리포트 수정에 같은 마진·종합점수·등급 산식을 사용한다. 초기에는 쿠팡 대분류 선택이 필요하며 시장가를 산출할 수 없으면 예상 판매가도 받는다. 대분류를 선택하면 카탈로그의 부가세 포함 기본 요율을 적용한다. Wing 카테고리 추천·세부 요율, 목표 순위 입찰가·상표 조회는 후속이다.
-- 별도 PostgreSQL 접속에서 `public.reserve_api_call(account, api, true)`을 HTTP 요청 전에 커밋한다. 예산 분류는 쿠팡 `default`, 네이버 `ad`·`trend`다. `public.block_api_account` 준비를 확인하며 공급사 403/429 응답(쿠팡 본문 코드 포함)은 해당 공동 정책을 차단하고 작업을 실패 처리한다. 간격 제한은 최대 두 번 더 예약을 시도한다. 예약된 외부 요청을 앱에서 자동 재시도하지 않는다.
+- 별도 PostgreSQL 접속에서 `public.reserve_api_call(account, api, true)`을 HTTP 요청 전에 커밋한다. 예산 분류는 쿠팡 `default`, 네이버 `ad`·`trend`다. `public.block_api_account`의 준비를 확인한 뒤 예약과 외부 호출을 수행한다. 공급사 403/429 응답(쿠팡 본문 코드 포함)은 해당 공동 정책을 차단한다. 쿠팡 검색 호출 오류로 시장가를 가져오지 못하면 계산 대기 리포트에서 예상 판매가 입력을 안내한다. 공동 예산 예약·차단 실패는 작업을 실패 처리한다. 간격 제한은 최대 두 번 더 예약을 시도한다. 예약된 외부 요청을 앱에서 자동 재시도하지 않는다.
 - 데이터랩의 공동 일일 예산 결과가 `exhausted:day`인 경우 트렌드·지속성을 빼고 무료 횟수 면제를 기록한다. 권한·간격·HTTP 오류는 작업 실패로 처리한다. 성공적으로 읽은 응답은 최대 256개를 프로세스별 10분 동안 보관한다.
 
 ### 상품 URL 판별과 요청
