@@ -114,7 +114,8 @@ DB가 이미 실행 중이면 [Spring 기동](#프론트엔드-api-테스트)으
 - [서버 현황](docs/CONTEXT.md) — 현재 진척, 구조 요약, 남은 문제와 다음 작업
 - [백엔드 구조·개발 규칙](docs/BACKEND.md): 패키지 책임, 응답·보안 계약, DB 관리와 외부 연동 경계, 미확정 사항
 - [기획서·API 명세](docs/references/): API 구현 시 확인할 원본 자료
-- [Collector 현재 상태](../product-data-collector/docs/CONTEXT.md): 수집·발행 시스템의 현재 구현 및 운영 미완료 항목
+- [Collector 현재 상태](https://github.com/Chozy-dev/Chozy-DataCollector/blob/main/docs/CONTEXT.md): 수집·발행 진행 상황
+- [외부 API 호출 한도](https://github.com/Chozy-dev/Chozy-DataCollector/blob/main/docs/API_CONTRACTS.md#외부-api-호출-한도): 쿠팡·네이버 등 공급사 기준
 
 작업 결과는 Git에서 제외한 프로젝트 최상위 `temp.md`에 최신 내용으로 덮어씁니다. 변경으로 진척이나 제약이 달라지면 CONTEXT를 갱신합니다.
 
@@ -142,7 +143,7 @@ DB가 이미 실행 중이면 [Spring 기동](#프론트엔드-api-테스트)으
             AS can_execute
    FROM budget_functions;
    ```
-3. 공동 예산 운영자가 쿠팡 `default`, 네이버 `ad`·`trend`의 계정 매핑, 공유 연동 상태(`platform_integrated`), 차단 상태, 현재 구간의 남은 예산과 호출 간격을 확인합니다. 정책이 없는 검증 DB에는 [실데이터 검증용 공동 호출 한도](docs/BACKEND.md#실데이터-검증용-공동-호출-한도)를 적용합니다.
+3. [공급사 호출 한도](https://github.com/Chozy-dev/Chozy-DataCollector/blob/main/docs/API_CONTRACTS.md#외부-api-호출-한도)를 바탕으로 계정의 잔여 한도와 호출 간격을 확인합니다. 공동 예산 DB의 쿠팡 `default`, 네이버 `ad`·`trend` 계정 매핑, `platform_integrated`, 차단 상태와 잔여 예약량을 확인합니다. 정책이 없는 검증 DB에는 [Spring 개발용 상한](docs/BACKEND.md#실데이터-검증용-공동-호출-한도)을 적용합니다.
 4. 위 조건을 확인한 후 [.env.example](.env.example)의 시장 분석 설정과 `APP_ANALYSIS_MARKET_ENABLED=true`를 검증 인스턴스에 주입합니다. Spring Boot는 환경 파일을 자동으로 읽지 않습니다. 기존 로컬 설정이 `NAVER_SEARCHAD_*`·`NAVER_API_HUB_*`를 사용한다면 [.env.example](.env.example)의 `NAVER_AD_*`·`NAVER_HUB_*` 이름으로 주입합니다. 공동 예산 DB와 공급처 연동은 실제 작업에서 확인합니다.
 
 #### 한 건 실행과 판정

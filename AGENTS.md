@@ -1,6 +1,7 @@
 # 작업 규칙
 
 - 먼저 `README.md`, `docs/CONTEXT.md`, `docs/BACKEND.md`와 해당 API의 `docs/references/` 원본을 확인한다.
+- 외부 API 호출 한도를 확인할 때는 [Collector API 계약](https://github.com/Chozy-dev/Chozy-DataCollector/blob/main/docs/API_CONTRACTS.md#외부-api-호출-한도)의 공급사 기준·원본 근거와 [Spring 개발용 상한](docs/BACKEND.md#실데이터-검증용-공동-호출-한도)을 함께 확인한다.
 - 사용자가 다음 작업을 맡기고 범위를 따로 지정하지 않으면 `docs/CONTEXT.md`의 개발 순서에서 가장 앞선 미완료 작업부터 진행한다.
 - Java 21/Maven Wrapper를 사용한다. 검증은 `./mvnw.cmd -B verify`로 수행한다.
 - 기본/테스트 환경은 DB·외부 API에 접속하지 않는다. 운영 DB, Docker, Collector 배치나 migration을 임의 실행하지 않는다.
