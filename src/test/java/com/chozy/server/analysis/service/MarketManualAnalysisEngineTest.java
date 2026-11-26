@@ -46,7 +46,7 @@ class MarketManualAnalysisEngineTest {
   private final RestClient.Builder http = RestClient.builder();
   private final MockRestServiceServer server = MockRestServiceServer.bindTo(http).build();
   private final MarketManualAnalysisEngine engine = new MarketManualAnalysisEngine(
-      new MarketApiClient(http.build(), jdbc, CLOCK, "coupang", "naver", "access", "secret",
+      new MarketApiClient(http.build(), mapper, jdbc, CLOCK, "coupang", "naver", "access", "secret",
           "ad-key", "ad-secret", "customer", "hub-id", "hub-key"), mapper, CLOCK);
 
   @Test
@@ -65,9 +65,9 @@ class MarketManualAnalysisEngineTest {
           .put("ratio", day > 28 ? 40 : 60);
     }
     server.expect(requestTo(TREND_URL))
-        .andRespond(withSuccess("{\"results\":[{\"data\":" + monthly + "}]}", MediaType.APPLICATION_JSON));
+        .andRespond(withSuccess("{\"results\":[{\"data\":" + monthly + "}]}", MediaType.TEXT_PLAIN));
     server.expect(requestTo(TREND_URL))
-        .andRespond(withSuccess("{\"results\":[{\"data\":" + daily + "}]}", MediaType.APPLICATION_JSON));
+        .andRespond(withSuccess("{\"results\":[{\"data\":" + daily + "}]}", MediaType.APPLICATION_OCTET_STREAM));
 
     var result = engine.analyze(1, INPUT);
     var snapshot = result.snapshot();
@@ -144,7 +144,7 @@ class MarketManualAnalysisEngineTest {
   void rejectsAnalysisBeforeCoupangRequestWhenBudgetGuardIsUnavailable() {
     expectKeywordData();
     when(jdbc.queryForObject(startsWith("SELECT CASE"), eq(String.class), eq("coupang"), eq("default")))
-        .thenReturn("runtime_budget_guard_missing");
+        .thenReturn("runtime_budget_guard_unavailable");
 
     assertThatThrownBy(() -> engine.analyze(1, INPUT))
         .isInstanceOf(IllegalStateException.class).hasMessage("Market call budget unavailable");

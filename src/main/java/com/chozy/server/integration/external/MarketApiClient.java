@@ -1,6 +1,7 @@
 package com.chozy.server.integration.external;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -34,6 +35,7 @@ public final class MarketApiClient {
   private static final int CACHE_LIMIT = 256;
 
   private final RestClient http;
+  private final ObjectMapper mapper;
   private final JdbcTemplate budgets;
   private final Clock clock;
   private final String coupangAccount;
@@ -47,10 +49,12 @@ public final class MarketApiClient {
   private final String hubKey;
   private final LinkedHashMap<String, CachedResponse> cache = new LinkedHashMap<>(16, 0.75f, true);
 
-  public MarketApiClient(RestClient http, JdbcTemplate budgets, Clock clock, String coupangAccount, String naverAccount,
+  public MarketApiClient(RestClient http, ObjectMapper mapper, JdbcTemplate budgets, Clock clock,
+      String coupangAccount, String naverAccount,
       String coupangAccess, String coupangSecret, String adKey, String adSecret, String customer,
       String hubId, String hubKey) {
     this.http = http;
+    this.mapper = mapper;
     this.budgets = budgets;
     this.clock = clock;
     this.coupangAccount = coupangAccount;
@@ -119,7 +123,7 @@ public final class MarketApiClient {
       int status = response.getStatusCode().value();
       if (status == 403 || status == 429) block(account, api);
       if (status != 200) throw new ProviderResponseException("Market API HTTP status " + status);
-      var body = response.bodyTo(JsonNode.class);
+      var body = mapper.readTree(response.getBody());
       if (body == null || !body.isObject()) throw new ProviderResponseException("Invalid market API response");
       return body;
     });
@@ -137,8 +141,9 @@ public final class MarketApiClient {
         }
       }
       result = budgets.queryForObject("""
-          SELECT CASE WHEN to_regprocedure('public.block_api_account(text,text)') IS NULL
-              THEN 'runtime_budget_guard_missing'
+          SELECT CASE WHEN NOT coalesce(has_function_privilege(
+              to_regprocedure('public.block_api_account(text,text)'), 'EXECUTE'), false)
+              THEN 'runtime_budget_guard_unavailable'
               ELSE public.reserve_api_call(?, ?, true) END
           """, String.class, account, api);
       if (!"interval".equals(result)) break;
