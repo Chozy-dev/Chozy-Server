@@ -12,22 +12,20 @@ CORS는 `CORS_ALLOWED_ORIGINS`에 정확한 HTTP(S) origin을 쉼표로 설정�
 
 ## 패키지와 의존 방향
 
-단일 애플리케이션의 기능별 모듈형 모놀리스다. 아래 기능 패키지는 **설계 경계**이며 API 구현 시 필요한 파일부터 만든다.
+단일 애플리케이션의 기능별 모듈형 모놀리스다. 기능별 패키지와 현재 통합 경계는 다음과 같다.
 
 | `com.chozy.server` 하위 | 책임 |
 | --- | --- |
 | auth | 가입·로그인·토큰 수명·본인인증 |
-| home | 완료 추천·인기 키워드 응답 조합 |
+| home | 공급 추천·쿠팡 베스트·네이버 시즌과 비교, `home.repository`의 완료 발행본 JDBC 조회 |
 | screening | 키워드 스크리닝·쇼핑 반응·최근 기록 |
 | analysis | URL 판별·실시간 정밀분석 요청과 진행 상태 |
-| report | 저장 리포트·최근 정밀분석 기록·입력 보완·재계산·의견 |
+| report | 리포트 조회·수정·의견. `ReportRecalculator`는 스냅샷·가격·시뮬레이션을, `ReportScoring`은 점수·등급 정책을 담당 |
 | favorite | 관심상품·판매 상태·판매 결과 |
 | notification | 사용자 알림·읽음 상태·설정 |
 | member | 프로필·비밀번호 변경·동의·탈퇴 |
 | usage | 월 사용량과 한도, 홈/마이페이지 공통 값 |
-| integration.collector | 완료 발행 조회 JDBC/SQL과 외부 데이터 변환 |
 | integration.external | 사용자 요청 시 네이버·쿠팡 등 호출과 공동 예산 연계 |
-| integration.ai | 계약 확정 후 필요한 AI 연동 |
 | common.response/error | HTTP envelope·예외 및 코드 |
 | common.security/config | 접근 정책·JWT 필터·CORS·OpenAPI |
 
@@ -41,7 +39,7 @@ DTO는 API 입력·출력 계약이며 Entity를 그대로 반환하거나 요�
 
 오류는 기존 명세 예시의 `message/status/errors/code`를 사용한다. C001~C012, A003~A006은 원문 표의 상태/메시지와 같다. Bean Validation C001, 타입 C005, 누락 파라미터 C008, JSON C009, 메서드 C007, 미디어 C010, 경로 부재 C003, 업무 충돌 C002, 권한 C006, 예상 밖 오류 C004를 공통 처리한다. C011 업로드/C012 비동기 기반 매핑도 제공한다. 오류 응답에 내부 메시지·SQL·stack trace·입력값을 넣지 않는다. 예기치 않은 예외 로그는 타입만 남긴다.
 
-공개 업무 경로는 HTTP 메서드와 정확한 경로로 허용한다. 나머지 업무 경로는 인증이 필요하다. `common.security.JwtAuthenticationFilter`는 Bearer Access Token의 서명과 만료를 확인한 뒤 회원의 현재 자격 증명 버전을 검증한다. `@AuthenticationPrincipal AuthenticatedMember`에서 회원 ID를 얻고 Service에서 자원 소유권을 검증한다. 잘못된 Authorization은 공개 API에서도 오류를 반환한다. OpenAPI의 bearerAuth는 로그아웃과 3단계 인증 API에 적용했다. offline/dev는 DB 의존 업무 빈 없이 기동한다.
+공개 업무 경로는 HTTP 메서드와 정확한 경로로 허용한다. 나머지 업무 경로는 인증이 필요하다. `common.security.JwtAuthenticationFilter`는 Bearer Access Token의 서명과 만료를 확인한 뒤 회원의 현재 자격 증명 버전을 검증한다. `@AuthenticationPrincipal AuthenticatedMember`에서 회원 ID를 얻고 Service에서 자원 소유권을 검증한다. 잘못된 Authorization은 공개 API에서도 오류를 반환한다. 회원 인증이 필요한 경로는 OpenAPI에 bearerAuth를 표시한다. offline/dev는 DB 의존 업무 빈 없이 기동한다.
 
 OpenAPI 3.1은 MVC 매핑과 실제 DTO에서 요청·성공 스키마를 생성한다. `@OpenApiContract`는 공통 오류와 API별 오류를 문서에 추가하고 기존 `ErrorCode`에서 예시를 생성한다. `dbdev`는 업무 API 문서, `dev`는 DB 없는 공통 문서를 공개한다. `offline/database/prod`는 기본 비활성이다. Swagger UI 인증은 현재 페이지에서만 유지한다. 접속·프론트엔드 설정은 [README](../README.md#프론트엔드-api-테스트)를 따른다.
 
@@ -81,7 +79,7 @@ Collector 운영 DB의 함수 실행 권한은 `access.py`의 SECURITY DEFINER �
 ## 홈 공급 조건 우수 상품 조회
 
 - 공개 `GET /home/products/recommended`는 필수 `source`(`DOMEME`, `OWNERCLAN`)와 선택 `size`(기본 10, 1~1000)를 받는다. 필수값 누락은 C008/400, 타입과 소싱처 코드 오류는 C005/400, 크기 범위 오류는 C001/400이다.
-- `RecommendedProductReader`는 한 소싱처의 최신 완료 발행본에서 요청한 개수까지 순위순으로 읽는다. HTTP 응답은 발행본의 `asOf`를 `updatedAt`으로 반환하고 순위, 미확인 지표의 null, 실제 측정값 0을 유지한다. 조회 결과에 발행본이 없으면 `updatedAt: null, items: []`를, 상품이 없는 완료 발행본은 `items: []`와 해당 발행본 시각을 반환한다. 두 경우 모두 200이다.
+- `RecommendedProductReader`는 한 소싱처의 최신 완료 발행본에서 요청한 개수까지 순위순으로 읽는다. HTTP 응답은 발행본의 `updatedAt`을 반환하고 순위, 미확인 지표의 null, 실제 측정값 0을 유지한다. 조회 결과에 발행본이 없으면 `updatedAt: null, items: []`를, 상품이 없는 완료 발행본은 `items: []`와 해당 발행본 시각을 반환한다. 두 경우 모두 200이다.
 - 발행본 조회 제공자가 미등록이거나 데이터 소스를 사용할 수 없으면 H001/503을 반환한다. 추천 JDBC 설정은 홈 시장 발행본 JDBC와 독립적으로 활성화한다.
 
 ## 홈 쿠팡 베스트 상품 조회
@@ -97,9 +95,7 @@ Collector 운영 DB의 함수 실행 권한은 `access.py`의 SECURITY DEFINER �
 
 ## Docker 연결 계획
 
-기존 Collector Compose는 postgres:16, 컨테이너 product-data-collector-postgres, 호스트 `${POSTGRES_PORT:-5432}:5432`, named volume postgres_data와 기본 Compose 네트워크를 사용한다. collectors/operations는 선택 프로필이며 기본 수집 시작이 아니다. 1단계에서는 Docker 메타데이터를 읽기 확인하고 Spring 개발 Compose만 실행했다. Collector DB 접속·설정·리소스 변경은 하지 않았다.
-
-배포 시 실제 기존 네트워크 이름을 읽기 전용 확인한 뒤 Spring 서비스만 해당 external network에 연결해 postgres:5432를 사용한다. 네트워크 이름을 추측하거나 PostgreSQL/volume을 중복 정의·교체하지 않는다. 호스트에서 실행하는 Spring은 검토된 호스트 공개 포트를 사용한다. Spring은 독립 포트 8080을 기본으로 하며 공개 포트 충돌·권한 전환·DB 준비 상태를 배포 때 확인한다. 운영 Dockerfile/Compose는 배포 단계에 작성한다. 격리 개발 DB의 Compose는 이 배포 연결과 별개다.
+격리 개발 DB는 [README의 Compose](../README.md#격리-개발-db-실행)로 실행한다. 배포 시 Spring과 Collector의 실제 네트워크를 확인하고 Collector 조회·공동 예산 연결을 별도로 설정한다. Spring 컨테이너는 검토한 external network를 사용하고, 호스트 실행은 검토한 공개 포트로 접속한다.
 
 ## Spring DB 기반과 회원 정책
 
@@ -109,7 +105,7 @@ Collector 운영 DB의 함수 실행 권한은 `access.py`의 SECURITY DEFINER �
 
 실행·연결·검증 명령은 [README](../README.md#격리-개발-db-실행)에 둔다. 개발 연결 정보는 `CHOZY_DEV_DB_NAME`, `CHOZY_DEV_DB_USERNAME`, `CHOZY_DEV_DB_URL`, `CHOZY_DEV_DB_PASSWORD` 환경변수로 관리한다. DB명·사용자·로컬 주소에는 안전한 기본값이 있으며 안전 검증은 문서의 canonical 대상만 허용한다. 비밀번호 기본값은 없다. 운영 접속 환경변수 `CHOZY_DB_*`와 분리한다. `dbdev`의 datasource URL/사용자가 달라지거나 offline/dev/prod/database와 혼용하면 bean 생성 전에 실패한다. Flyway 별도 URL/계정 주입도 거부한다. 접속 실패는 Hikari 제한 시간과 초기 JPA/Flyway 검증에서 기동 실패로 처리하며 offline으로 자동 전환하지 않는다.
 
-Flyway core와 PostgreSQL 모듈은 Boot BOM 버전을 사용한다. `V1__create_chozy_schema.sql`은 스키마 경계, `V2__create_members.sql`은 회원 테이블을 담당한다. Flyway가 history 배치를 위해 스키마를 먼저 만들므로 V1은 `IF NOT EXISTS`다. 이력은 `chozy.flyway_schema_history`에 checksum·버전·성공 여부로 관리한다. validate-on-migrate=true, baseline-on-migrate=false, clean-disabled=true다. 적용된 SQL을 수정하지 말고 V3 이후 migration을 추가한다. Collector `schema_migrations`와 기존 DDL은 참조하거나 수정하지 않는다. 운영 서버 공동 사용 여부와 관계없이 스키마·소유자·runtime 권한을 분리해야 하며 이번 단계는 운영 적용을 하지 않는다.
+Flyway core와 PostgreSQL 모듈은 Boot BOM 버전을 사용한다. `V1__create_chozy_schema.sql`은 스키마 경계, `V2__create_members.sql`은 회원 테이블을 담당한다. Flyway가 history 배치를 위해 스키마를 먼저 만들므로 V1은 `IF NOT EXISTS`다. 이력은 `chozy.flyway_schema_history`에 checksum·버전·성공 여부로 관리한다. validate-on-migrate=true, baseline-on-migrate=false, clean-disabled=true다. 스키마 변경은 다음 버전의 migration으로 추가한다. Collector `schema_migrations`와 기존 DDL은 참조하거나 수정하지 않는다. 운영에서도 스키마·소유자·runtime 권한을 분리한다.
 
 ### 최소 회원 데이터와 중복 정책
 
@@ -131,7 +127,7 @@ Flyway core와 PostgreSQL 모듈은 Boot BOM 버전을 사용한다. `V1__create
 2. 원본 DI를 저장하지 않는 키 기반 해시(HMAC 등), key 보관/버전/회전, canonical 인코딩을 검토하고 업체 선정 후 확정한다. 임시 해시를 생성해 인증값으로 사용하는 경로는 없다.
 3. 동일 DI의 1인 1계정 보장과 기존 회원 연계/충돌/탈퇴 후 재가입 정책을 정해야 한다. 가입 요청의 미검증 DI를 신뢰하거나 아이디 중복 검사만으로 1인 1계정을 보장했다고 처리하지 않는다.
 4. 카카오·네이버 로그인과 기존 계정 연결은 미구현이다. 후속 외부 계정 테이블에는 `(provider, provider_user_id)` Unique가 필요하다. 동일 DI로 검증된 회원은 별도 계정 생성보다 기존 회원 연결을 우선 검토하되 본인 확인과 계정 탈취 방지 정책을 확정한다. 이메일/전화번호 일치만으로 자동 연결하지 않는다.
-5. 일반 회원가입·로그인·JWT·Refresh Token 저장/재발급·로그아웃은 2단계에서 구현했다. 이메일 인증·외부 인증 서비스는 미구현이다. 기획서에서는 이메일 인증을 삭제하고 알림용 필수 입력으로 변경했으므로 이메일 인증 도입 여부도 별도 결정한다.
+5. 이메일 인증과 비밀번호 찾기·재설정은 후속이다. 기획서의 이메일은 알림용 필수 입력이며, 인증을 도입하면 목적과 계약을 정한다.
 
 ### 검증 원칙
 
@@ -162,7 +158,7 @@ Java는 UTF-8, 공백 2칸을 사용하며 Maven XML은 공백 4칸을 사용한
 버전 근거: [Spring Boot 3.5 공식 문서](https://docs.spring.io/spring-boot/3.5/), [springdoc 호환성 안내](https://springdoc.org/v2/), Maven Central의 실제 배포 artifact 확인. Boot 3.x 요구를 유지했으며 배포 전 해당 계열 지원 정책과 보안 패치를 재검토한다.
 
 
-## 2단계 일반 계정 인증 구현
+## 일반 계정 인증
 
 ### API와 패키지
 
@@ -192,37 +188,23 @@ HS256만 허용하며 환경변수 `JWT_SECRET_BASE64`에 CSPRNG로 생성한 32
 
 issuer=chozy, sub=회원 ID, type=access/refresh, 임의 UUID jti, iat/exp를 서명한다. 서명/알고리즘/issuer/유형/필수 claim/시각을 검증하며 시계 유예는 없다. `JWT_ACCESS_SECONDS` 기본 3600(1시간), `JWT_REFRESH_SECONDS` 기본 1209600(14일)이다. 운영은 TLS 및 시간 동기화가 필요하며 키 변경은 기존 토큰을 무효화한다. 키 버전/무중단 교체 정책은 후속 과제다. 외부 인증 서버·Redis는 도입하지 않았다.
 
-V1/V2는 변경하지 않았다. V3 `V3__create_refresh_tokens.sql`은 chozy.refresh_tokens(id, member_id FK, token_hash UNIQUE, expires_at, created_at, revoked_at)와 회원/만료 인덱스를 추가한다. 고엔트로피 서명 토큰의 SHA-256 해시만 저장하며 원문은 응답 시 전달한다. 로그인마다 별도 토큰을 생성해 복수 기기 로그인을 허용한다. 서버 재시작 후에도 같은 키와 DB로 검증한다.
+V3 `V3__create_refresh_tokens.sql`은 chozy.refresh_tokens(id, member_id FK, token_hash UNIQUE, expires_at, created_at, revoked_at)와 회원/만료 인덱스를 추가한다. 고엔트로피 서명 토큰의 SHA-256 해시만 저장하며 원문은 응답 시 전달한다. 로그인마다 별도 토큰을 생성해 복수 기기 로그인을 허용한다. 서버 재시작 후에도 같은 키와 DB로 검증한다.
 
 재발급은 Access 없이 Refresh의 서명·만료·유형 및 저장 해시/소유자/유효 상태를 확인한다. PESSIMISTIC_WRITE 행 잠금과 단일 트랜잭션으로 이전 토큰 revoke와 새 토큰 저장을 원자적으로 수행한다. 동시 재발급은 하나만 성공하며 이전 토큰 재사용은 A004다. 재사용 시 후속 토큰까지 자동 폐기하는 family 정책은 적용하지 않았다. 로그아웃은 Access 회원 ID와 Refresh 소유자를 대조한 뒤 같은 행 잠금으로 무효화한다. 타인 토큰은 C006이며 해당 토큰은 보존된다.
 
-일반 로그아웃은 해당 Refresh를 폐기하며 기존 Access는 남은 수명(기본 최대 1시간) 동안 유효하다. 비밀번호 변경은 3단계에서 별도 회원 단위 무효화를 적용했다. 만료·폐기 행은 감사와 재사용 검증을 위해 보존하며 만료 인덱스로 정리 작업을 확장할 수 있다. 보존 기간과 정기 삭제는 운영 전 확정한다.
+일반 로그아웃은 해당 Refresh를 폐기하며 기존 Access는 남은 수명(기본 최대 1시간) 동안 유효하다. 비밀번호 변경은 회원 단위 자격 증명 버전과 Refresh 폐기를 적용한다. 만료·폐기 행은 감사와 재사용 검증을 위해 보존하며 만료 인덱스로 정리 작업을 확장할 수 있다. 보존 기간과 정기 삭제는 운영 전 확정한다.
 
 ### 오류 계약 보완
 
 Access 만료=A003/401, Refresh 만료=A005/401, 위조·잘못된 형식·서명·유형·누락 인증=A004/401이다. 로그인 ID 부재와 비밀번호 불일치는 동일 A004 응답이며 부재 계정에도 dummy BCrypt 검증을 수행한다. Refresh 미등록/재사용/로그아웃 폐기도 인증 정보가 유효하지 않으므로 기존 의미에 맞는 A004를 사용한다. 중복=C002, 입력=C001, 타인 Refresh 및 운영 가입 차단=C006이다. A006은 SMS 코드 의미이므로 재사용하지 않았다. 원본에는 로그인 실패/Refresh 재사용/가입 차단 전용 코드가 없으며 **전용 코드를 확정한 것으로 취급하지 않는다.** 향후 프론트와 세부 코드 계약을 보완한다.
-
-### 미구현과 후속 연결
-
-- 휴대폰 본인인증 업체 선정, SMS 발송/검증, 실제 DI 검증·저장 API는 미구현이다. 업체의 실제 결과를 검증하고 안전하게 해시한 DI로 기존 회원을 조회해 중복 생성을 차단해야 한다. 검증된 DI 기반 1인 1계정은 이 연동 뒤 완성한다. 가입 API에 인증 결과 필드가 없는 기획/명세 차이를 해소해야 한다.
-- 기존 미인증 일반 계정의 연결·전환, DI 해시 키 관리/교체 및 탈퇴·재가입 보관 정책을 확정해야 한다.
-- 카카오·네이버 OAuth, 소셜 연결·해제는 미구현이다. 동일 DI 기반 계정 중복 방지와 기존 회원 연결 정책을 확정하며 이메일/전화번호 일치만으로 타인 소셜 계정을 자동 연결하지 않는다. 소셜 계정에는 비밀번호가 없으므로 password_hash NOT NULL 변경 또는 인증수단 분리 Migration이 필요하다. 이번에는 가짜 클래스·사전 소셜 테이블을 만들지 않았다.
-- 이메일 인증과 비밀번호 찾기/재설정은 후속이다. 이메일 인증은 기획서에서 가입 요건으로 제외되어 적용 목적과 계약을 별도 확정한다.
 
 ### 회원탈퇴
 
 JWT `DELETE /my/account`는 토큰 회원을 잠근 뒤 현재 비밀번호를 검증한다. 비밀번호가 틀리면 C001/400이다. 성공 시 V11의 `withdrawn_at`과 자격 증명 버전을 갱신하고 모든 Refresh Token을 동일 트랜잭션에서 폐기한다. 로그인·Access 인증·Refresh 회전은 활성 상태를 검증한다. 이미 접수된 분석 작업은 기존 작업 처리 정책을 따른다.
 
 현재 비활성 계정의 식별자와 관련 데이터를 보존한다. 보관 기간과 삭제·비식별화, 동일 식별자로 재가입하는 정책은 공개 전에 확정해야 한다. 현재 Unique 제약은 탈퇴 계정에도 적용한다.
-- 다음 단계는 프론트 인증 흐름 연결·명세 보완, 본인인증 계약 선정과 계정 전환 설계, 인증 주체를 사용하는 회원 소유 업무 API 구현이 적절하다. 운영 공개 전 요청 제한과 인증 시도 모니터링도 결정한다.
 
-### 검증 방식
-
-기본 verify는 offline 기동/기존 공통 회귀와 JWT 유형·위조·만료·키 및 가입 허용 정책을 DB 없이 검증한다. db-test는 기존 MemberDatabaseIT를 유지하고 AuthDatabaseIT에서 명세 응답·검증·정규화·해시·중복/동시 가입·로그인·Security 필터·Rotation/재사용/동시 재발급·소유권/로그아웃·Swagger를 검증한다. 테스트 전용 PostgreSQL 컨테이너를 실제 재시작한 뒤 저장 토큰의 재발급까지 검증한다. 개발 DB/회원 데이터를 삭제하거나 Collector DB에 접속하지 않는다. 테스트 컨테이너는 격리 통합 테스트용이며 개발 DB 컨테이너를 중복 생성하는 용도가 아니다.
-
-JWT 구현 참고: [Spring Security 공식 JWT 문서](https://docs.spring.io/spring-security/reference/servlet/oauth2/resource-server/jwt.html). 현재 구현은 직접 서명/검증 후 기존 공통 오류 응답과 통합한다.
-
-## 3단계 마이페이지와 무료 정밀분석 사용량
+## 마이페이지와 무료 정밀분석 사용량
 
 | API | 구현 |
 | --- | --- |
@@ -240,19 +222,9 @@ JWT 구현 참고: [Spring Security 공식 JWT 문서](https://docs.spring.io/sp
 
 V5는 `report_usage_entries`, `member_screening_runs`, `member_favorites`를 추가한다. `ReportUsageService`가 홈과 마이페이지의 공통 집계값을 제공한다. 월간 무료 기본 한도는 `app.usage.free-monthly-report-limit` / `FREE_MONTHLY_REPORT_LIMIT`에서 설정하며 기본값은 3이다. 매월 1일 00:00 KST에 읽는 집계 월이 바뀐다. 이전 달 기록은 유지하며 한도를 낮춘 경우 잔여 횟수의 최솟값은 0이다.
 
-- 정밀분석 구현 시 성공한 **새 리포트**의 저장 트랜잭션에서 `recordCreatedReport(memberId, reportId, dataLabQuotaExhausted)`를 호출한다. PostgreSQL의 기본 READ COMMITTED 트랜잭션을 사용한다. 같은 회원의 차감 검증과 원장 기록은 회원 행 잠금으로 직렬화하고, 리포트 ID의 기본 키로 재시도 중복을 막는다. 정밀분석은 한도 초과 예외가 발생하면 리포트 저장도 롤백해야 한다.
-- 실패, 저장 리포트 열기, 옵션 변경과 재계산은 원장에 기록하지 않는다. 데이터랩의 공유 호출 한도가 100% 소진되어 트렌드·지속성을 제외한 리포트는 신뢰할 수 있는 연동 결과로 면제 여부를 전달한다. 면제 기록은 무료 횟수 집계에서 제외한다. 접수·예약 정책은 [정밀분석 작업과 저장](#정밀분석-작업과-저장)을 따른다. 일일 사용량 정책과 데이터랩 예산 연동은 후속 작업이다.
+- 성공한 **새 리포트**의 저장 트랜잭션에서 `recordCreatedReport(memberId, reportId, dataLabQuotaExhausted)`를 호출한다. PostgreSQL의 기본 READ COMMITTED 트랜잭션을 사용한다. 같은 회원의 차감 검증과 원장 기록은 회원 행 잠금으로 직렬화하고, 리포트 ID의 기본 키로 재시도 중복을 막는다. 한도 초과 예외가 발생하면 리포트 저장도 롤백한다.
+- 실패, 저장 리포트 열기, 옵션 변경과 재계산은 원장에 기록하지 않는다. 데이터랩의 공유 호출 한도가 100% 소진되어 트렌드·지속성을 제외한 리포트는 신뢰할 수 있는 연동 결과로 면제 여부를 전달한다. 면제 기록은 무료 횟수 집계에서 제외한다. 접수·예약 정책은 [정밀분석 작업과 저장](#정밀분석-작업과-저장)을 따른다. 직접 입력 엔진의 공동 데이터랩 예산은 [시장 데이터](#직접-입력-시장-데이터)를 따른다.
 - 스크리닝은 해당 회원의 KST 월 구간에 저장된 실행 행을 센다. 관심상품은 V8 등록 API와 연결되어 해당 회원의 활성 `INTERESTED`와 `SELLING` 등록 행을 센다.
-
-### 검증과 남은 작업
-
-2026-11-23 개발 DB 적용 중 `-Pdb-test verify`를 재실행했다. 기본 테스트 29개와 격리 PostgreSQL 16 통합 테스트 42개가 모두 통과했다. 격리 테스트에서 V2 데이터의 V3~V5 업그레이드, 기존 API 회귀, 회원 격리, 비밀번호 변경과 재발급 경합, 동의 이력, KST 경계, 사용량 한도·중복·면제·롤백을 검증했다.
-
-### 기존 개발 DB 적용 상태
-
-2026-11-24 기존 `chozy_spring_dev`의 V5 시점 PostgreSQL 아카이브를 만들고 목록에서 Flyway 이력 포함 여부를 확인했다. `dbdev` 기동으로 V6~V11을 적용했고 Flyway 성공 이력 11건과 JPA 스키마 검증을 확인했다. 회원·Refresh Token·관심상품·리포트 사용량 원장의 행 수를 적용 전후에 대조했다.
-
-검증 기동 주소는 `127.0.0.1:8080`이다. `dbdev` 설정으로 Swagger UI·OpenAPI JSON·쿠팡 대분류 조회는 200, 미인증 마이페이지 조회는 401을 확인했다. JWT 키는 프로세스 환경에 주입했다.
 
 ## 정밀분석 작업과 저장
 
@@ -267,7 +239,7 @@ DB 프로필에서 JWT로 `POST /search/analyses/manual`과 `GET /search/analyse
 
 - opt-in 엔진은 검색광고 `RelKwdStat`에서 키워드와 경쟁 지표를 읽고 쿠팡 파트너스 상품 검색을 사용한다. 시장가는 상품명을 먼저 조회하고 결과가 비면 분석 키워드를 시도한다. 규격·묶음·배송 조건·이상치를 반영한 중앙값과 표본 경고를 저장한다. 데이터랩 일간 56일과 다년 완결 월로 추세·지속성을 계산한다. [검색광고 API](https://naver.github.io/searchad-apidoc/) · [데이터랩 검색어 트렌드 API](https://api.ncloud-docs.com/docs/naver-api-hub-search-trend)
 - 초기 리포트와 리포트 수정에 같은 마진·종합점수·등급 산식을 사용한다. 초기에는 쿠팡 대분류 선택이 필요하며 시장가를 산출할 수 없으면 예상 판매가도 받는다. 대분류를 선택하면 카탈로그의 부가세 포함 기본 요율을 적용한다. Wing 카테고리 추천·세부 요율, 목표 순위 입찰가·상표 조회는 후속이다.
-- 별도 PostgreSQL 접속에서 `public.reserve_api_call(account, api, true)`을 HTTP 요청 전에 커밋한다. 예산 분류는 쿠팡 `default`, 네이버 `ad`·`trend`다. `public.block_api_account`의 준비를 확인한 뒤 예약과 외부 호출을 수행한다. 공급사 403/429 응답(쿠팡 본문 코드 포함)은 해당 공동 정책을 차단한다. 쿠팡 검색 호출 오류로 시장가를 가져오지 못하면 계산 대기 리포트에서 예상 판매가 입력을 안내한다. 공동 예산 예약·차단 실패는 작업을 실패 처리한다. 간격 제한은 최대 두 번 더 예약을 시도한다. 예약된 외부 요청을 앱에서 자동 재시도하지 않는다.
+- 별도 PostgreSQL 접속에서 `public.reserve_api_call(account, api, true)`을 HTTP 요청 전에 커밋한다. 예산 분류는 쿠팡 `default`, 네이버 `ad`·`trend`다. `public.block_api_account`가 없거나 Spring 접속 역할에 실행 권한이 없으면 예약과 외부 호출 전에 실패한다. 공급사 403/429 응답(쿠팡 본문 코드 포함)은 해당 공동 정책을 차단한다. 쿠팡 검색 호출 오류로 시장가를 가져오지 못하면 계산 대기 리포트에서 예상 판매가 입력을 안내한다. 공동 예산 예약·차단 실패는 작업을 실패 처리한다. 간격 제한은 최대 두 번 더 예약을 시도한다. 예약된 외부 요청을 앱에서 자동 재시도하지 않는다.
 - 데이터랩의 공동 일일 예산 결과가 `exhausted:day`인 경우 트렌드·지속성을 빼고 무료 횟수 면제를 기록한다. 권한·간격·HTTP 오류는 작업 실패로 처리한다. 성공적으로 읽은 응답은 최대 256개를 프로세스별 10분 동안 보관한다.
 
 ### 상품 URL 판별과 요청

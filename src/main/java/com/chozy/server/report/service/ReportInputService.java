@@ -65,7 +65,7 @@ public class ReportInputService {
         "USER_SELECTED".equals(draft.at("/investmentStrategy/coupangRegistration/categorySource").asText());
     boolean categoryChanged = category != null && (!category.categoryCode().equals(previous.coupangCategoryCode())
         || !userSelectedCategory
-        || differs(category.feeRate(), ReportRecalculator.decimal(draft.at("/internalDiagnosis/profitability/feeRate"))));
+        || differs(category.feeRate(), ReportSnapshotReader.decimal(draft.at("/internalDiagnosis/profitability/feeRate"))));
     var requestedPrice = request.getExpectedSellingPrice();
     boolean priceChanged = requestedPrice != null && differs(requestedPrice, previous.expectedSellingPrice());
     String keyword = request.getKeyword();

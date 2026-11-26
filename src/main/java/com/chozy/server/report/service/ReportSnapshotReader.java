@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.time.ZoneId;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -132,5 +133,9 @@ final class ReportSnapshotReader {
 
   private static void defaultText(ObjectNode section, String field, String value) {
     if (!section.hasNonNull(field)) section.put(field, value);
+  }
+
+  static BigDecimal decimal(JsonNode value) {
+    return value.isNumber() ? value.decimalValue() : null;
   }
 }

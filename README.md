@@ -85,60 +85,29 @@ JDBC 주소는 `jdbc:postgresql://127.0.0.1:55432/chozy_spring_dev`이고 사용
 
 DB가 이미 실행 중이면 [Spring 기동](#프론트엔드-api-테스트)으로 넘어갑니다. `dbdev`는 기동 시 이 개발 DB에 대기 중인 Flyway 마이그레이션을 적용합니다. 보존할 개발 데이터가 있으면 기동 전 백업을 확보합니다.
 
-```powershell
-# 기본 회귀: Docker/DB 없이 실행
-.\mvnw.cmd -B verify
-# DB 회귀: Testcontainers가 매번 별도 PostgreSQL 16을 생성·정리
-.\mvnw.cmd -B -Pdb-test verify
-```
-
-DB 통합 테스트는 외부 접속 URL을 받지 않으며 개발 데이터도 삭제하지 않습니다. Docker가 없으면 통합 검증은 실패합니다. 결과는 `target/failsafe-reports/`에 기록됩니다. Migration·회원 정책·후속 인증 설계는 [BACKEND](docs/BACKEND.md#spring-db-기반과-회원-정책)를 따릅니다.
+통합 테스트 실행 방법은 [검증](#검증), Flyway 설정은 [BACKEND](docs/BACKEND.md#환경과-migration-경계)를 참고합니다.
 
 ## 프로젝트 구조
 
-```text
-Chozy_Server/
-├── README.md                    프로젝트 소개·실행·설정·검증
-├── AGENTS.md                    자동화 작업 규칙
-├── pom.xml                      의존성과 빌드
-├── mvnw / mvnw.cmd / .mvn/       Maven Wrapper
-├── .env.example                 환경변수 예시
-├── .editorconfig                들여쓰기·문자 인코딩 기준
-├── .gitattributes               소스와 실행 스크립트 줄바꿈 기준
-├── docs/
-│   ├── BACKEND.md               아키텍처·개발 규칙·연동 경계
-│   ├── CONTEXT.md               현재 진척·제약·검증·다음 작업
-│   └── references/              기획서·API 명세 원본
-├── src/main/
-│   ├── java/com/chozy/server/
-│   │   ├── ChozyServerApplication.java
-│   │   └── common/
-│   │       ├── config/          OpenAPI 설정
-│   │       ├── error/           에러 코드·업무 예외·전역 예외 처리
-│   │       ├── response/        성공 응답
-│   │       └── security/        접근 정책·CORS·보안 오류 응답
-│   └── resources/               공통 및 프로필별 application 설정
-├── src/test/java/com/chozy/server/
-│   ├── ChozyServerApplicationTest.java
-│   ├── common/
-│   │   ├── error/               예외 응답 검증
-│   │   ├── response/            성공 응답 검증
-│   │   └── security/            접근 정책·CORS·설정 검증
-│   └── support/                 명시적으로 가져오는 테스트 전용 fixture
-└── target/                      빌드 산출물·검증 로그 (Git 제외)
-```
+| 경로 | 내용 |
+| --- | --- |
+| `src/main/java/com/chozy/server/` | 기능별 API, `common` 공통 웹·보안, `integration/external` 외부 클라이언트 |
+| `src/main/resources/` | 공통·프로필별 설정과 `db/migration/chozy` |
+| `src/test/java/com/chozy/server/` | 기능별 테스트와 `support` 공용 fixture |
+| `docs/` | 현재 구현·개발 규칙·참고 원본 |
+| `target/` | 빌드 산출물과 검증 로그 |
 
-업무 API는 `auth`, `home`, `screening`, `analysis`, `report`, `favorite`, `notification`, `member`, `usage` 등 **기능별 패키지**에 추가합니다. 각 기능 안에서 필요한 Controller → Service → Repository와 DTO/Entity를 생성합니다. 패키지별 책임과 Collector·외부 시스템 경계는 [백엔드 개발 규칙](docs/BACKEND.md#패키지와-의존-방향)을 따릅니다.
+패키지별 책임은 [백엔드 개발 규칙](docs/BACKEND.md#패키지와-의존-방향)을 따릅니다.
 
 ## 검증
 
 ```powershell
 .\mvnw.cmd -B verify
-# 특정 책임만 검증하는 예
 .\mvnw.cmd '-Dtest=GlobalExceptionHandlerTest' test
+.\mvnw.cmd -B -Pdb-test verify
 ```
 
-테스트는 공통 응답·MVC 예외·보안 차단·CORS·문서 접근과 DB 인프라 부재를 검증합니다. 실제 DB나 공급처 API를 호출하지 않습니다. 결과는 `target/surefire-reports/`, 실행 JAR는 `target/server-0.0.1-SNAPSHOT.jar`에 생성됩니다.
+기본 검증은 DB·외부 API 없이 실행하며 `target/surefire-reports/`에 결과를 저장합니다. `db-test`는 Docker에서 별도 PostgreSQL 16을 시작하고 `target/failsafe-reports/`에 결과를 저장합니다. 실행 JAR는 `target/server-0.0.1-SNAPSHOT.jar`입니다.
 
 ## 개발 문서
 
@@ -174,7 +143,7 @@ Chozy_Server/
    FROM budget_functions;
    ```
 3. 공동 예산 운영자가 최소 권한 적용 상태와 쿠팡 `default`, 네이버 `ad`·`trend`의 실제 계정 매핑, 공유 연동 상태(`platform_integrated`), 차단 상태, 현재 구간의 남은 예산과 호출 간격을 확인합니다. 캐시가 비어 있으면 한 건에 쿠팡 최대 2회, 네이버 검색광고 1회, 데이터랩 월간·일간 각 1회의 HTTP 호출이 발생할 수 있습니다. 간격 제한이 걸리면 엔진은 1초씩 기다리며 예약을 최대 두 번 더 시도합니다. [시장 데이터와 호출 한도 계약](docs/BACKEND.md#직접-입력-시장-데이터)
-4. 위 조건을 확인한 후 [.env.example](.env.example)의 시장 분석 설정과 `APP_ANALYSIS_MARKET_ENABLED=true`를 검증 인스턴스에 주입합니다. Spring Boot는 환경 파일을 자동으로 읽지 않습니다. 기동 성공은 설정 바인딩 확인이며, 공동 예산 DB와 공급처 연동은 실제 작업에서 확인합니다.
+4. 위 조건을 확인한 후 [.env.example](.env.example)의 시장 분석 설정과 `APP_ANALYSIS_MARKET_ENABLED=true`를 검증 인스턴스에 주입합니다. Spring Boot는 환경 파일을 자동으로 읽지 않습니다. 기존 로컬 설정이 `NAVER_SEARCHAD_*`·`NAVER_API_HUB_*`를 사용한다면 [.env.example](.env.example)의 `NAVER_AD_*`·`NAVER_HUB_*` 이름으로 주입합니다. 공동 예산 DB와 공급처 연동은 실제 작업에서 확인합니다.
 
 #### 한 건 실행과 판정
 
@@ -201,11 +170,7 @@ Swagger에서 인증·회원·홈·검색·리포트·관심상품·알림 API�
 
 `GET /home/products/recommended?source=DOMEME`는 로그인 없이 호출할 수 있습니다. 소싱처는 `DOMEME`, `OWNERCLAN` 중 하나이며 `size`를 생략하면 10개까지 요청합니다. `dbdev` 또는 `database`에서 [.env.example](.env.example)의 추천 조회 설정과 `APP_HOME_RECOMMENDATIONS_ENABLED=true`를 주입하면 Collector의 최신 완료 발행본을 읽습니다. Collector DB 로그인에는 `public.read_supply_home(text, integer)` 실행 권한이 필요합니다. 설정 전에는 H001/503을 반환합니다.
 
-`GET /home/keywords/coupang`은 로그인 없이 호출할 수 있습니다. `categoryId`를 생략하면 최신 완료 발행본에서 ID가 가장 작은 카테고리를 선택합니다.
-
-`GET /home/keywords/naver`와 `GET /home/keywords/compare`는 로그인 없이 호출할 수 있습니다. `themeCode`를 생략하면 최신 완료 네이버 발행본에서 코드가 가장 작은 테마를 선택합니다. 비교에는 같은 기준일의 쿠팡 발행본을 사용합니다.
-
-`dbdev` 또는 `database`에서 [.env.example](.env.example)의 홈 시장 발행본 설정과 `APP_HOME_MARKET_PUBLICATIONS_ENABLED=true`를 주입하면 세 API가 Collector DB를 읽습니다. [필요한 읽기 권한](docs/BACKEND.md#collector와-postgresql-경계)을 가진 전용 로그인으로 연결합니다. 비활성화하거나 조회에 실패하면 쿠팡 베스트는 H002/503, 네이버 시즌·비교는 H003/503을 반환합니다.
+홈 시장 조회에는 `APP_HOME_MARKET_PUBLICATIONS_ENABLED=true`와 [.env.example](.env.example)의 접속 설정을 사용합니다. [읽기 권한](docs/BACKEND.md#collector와-postgresql-경계)과 [카테고리 기본값 및 비교 계약](docs/BACKEND.md#홈-쿠팡-베스트-상품-조회)을 참고합니다.
 
 `dbdev` Swagger에서 회원탈퇴를 테스트하려면 테스트용 회원으로 로그인하고 `DELETE /my/account`에 현재 비밀번호를 `password`로 보냅니다. 성공하면 해당 계정의 로그인과 기존 토큰 사용이 차단됩니다.
 
@@ -253,13 +218,6 @@ CORS는 `CORS_ALLOWED_ORIGINS`에 실제 프론트엔드 origin을 쉼표로 구
 }
 ```
 
-일반 가입은 본인인증 없는 임시 개발 경로입니다. dbdev만 기본 허용하고 database는 기본 차단, prod는 설정을 켜도 서버에서 차단합니다. 본인인증/DI·카카오·네이버 로그인은 미구현입니다. 로그아웃은 Refresh를 폐기하며 기존 Access는 잔여 만료 시간까지 유효합니다. 정책·미확정 계약·V3 저장 구조는 [BACKEND](docs/BACKEND.md#2단계-일반-계정-인증-구현)를 참고합니다.
+일반 가입은 본인인증 없는 임시 개발 경로입니다. dbdev만 기본 허용하고 database는 기본 차단, prod는 설정을 켜도 서버에서 차단합니다. 본인인증/DI·카카오·네이버 로그인은 미구현입니다. 로그아웃은 Refresh를 폐기하며 기존 Access는 잔여 만료 시간까지 유효합니다. 정책·미확정 계약·V3 저장 구조는 [BACKEND](docs/BACKEND.md#일반-계정-인증)를 참고합니다.
 
-`PATCH /my/password` 변경 성공 후에는 기존 Access와 Refresh 모두 차단됩니다. 홈·마이페이지의 무료 정밀분석 한도는 `FREE_MONTHLY_REPORT_LIMIT`에서 설정하며 기본값은 3입니다. 자세한 저장·집계 정책은 [BACKEND](docs/BACKEND.md#3단계-마이페이지와-무료-정밀분석-사용량)를 참고합니다.
-
-```powershell
-# DB 없이 기동·공통/JWT 회귀
-.\mvnw.cmd -B verify
-# Docker 필요: 기존 DB와 독립된 Testcontainers PostgreSQL에서 인증/동시성/DB 재시작 검증
-.\mvnw.cmd -B -Pdb-test verify
-```
+`PATCH /my/password` 변경 성공 후에는 기존 Access와 Refresh 모두 차단됩니다. 홈·마이페이지의 무료 정밀분석 한도는 `FREE_MONTHLY_REPORT_LIMIT`에서 설정하며 기본값은 3입니다. 자세한 저장·집계 정책은 [BACKEND](docs/BACKEND.md#마이페이지와-무료-정밀분석-사용량)를 참고합니다.
