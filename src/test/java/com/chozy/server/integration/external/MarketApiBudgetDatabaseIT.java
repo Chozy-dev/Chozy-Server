@@ -7,6 +7,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Clock;
+import java.time.LocalDate;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -37,7 +38,7 @@ class MarketApiBudgetDatabaseIT {
       var http = RestClient.builder();
       var provider = MockRestServiceServer.bindTo(http).build();
       var client = new MarketApiClient(http.build(), new ObjectMapper(), budget, Clock.systemUTC(), "coupang", "naver",
-          "access", "secret", "ad-key", "ad-secret", "customer", "hub-id", "hub-key");
+          "access", "secret", "ad-key", "ad-secret", "customer", "hub-id", "hub-key", false);
 
       assertThatThrownBy(() -> client.keywords("lantern"))
           .isInstanceOf(IllegalStateException.class).hasMessage("Market call budget unavailable");
@@ -59,6 +60,30 @@ class MarketApiBudgetDatabaseIT {
       assertThat(client.keywords("lantern").isArray()).isTrue();
       assertThat(admin.queryForObject("SELECT is_called FROM public.reservations", Boolean.class)).isTrue();
       provider.verify();
+
+      admin.execute("""
+          CREATE TABLE public.api_budget_policy(
+              account text, api text, shared_api text, PRIMARY KEY(account, api))
+          """);
+      admin.execute("GRANT SELECT ON public.api_budget_policy TO budget_client");
+      admin.execute("INSERT INTO public.api_budget_policy VALUES ('naver', 'trend', NULL)");
+      var productionHttp = RestClient.builder();
+      var productionProvider = MockRestServiceServer.bindTo(productionHttp).build();
+      var production = new MarketApiClient(productionHttp.build(), new ObjectMapper(), budget, Clock.systemUTC(),
+          "coupang", "naver", "access", "secret", "ad-key", "ad-secret", "customer", "hub-id", "hub-key", true);
+      LocalDate date = LocalDate.of(2026, 1, 1);
+      assertThatThrownBy(() -> production.trend("lantern", date, date.plusDays(1), "date"))
+          .isInstanceOf(IllegalStateException.class).hasMessage("Market call budget unavailable");
+      assertThat(admin.queryForObject("SELECT last_value FROM public.reservations", Long.class)).isEqualTo(1L);
+      productionProvider.verify();
+
+      admin.execute("UPDATE public.api_budget_policy SET shared_api='hub' WHERE api='trend'");
+      productionProvider.reset();
+      productionProvider.expect(requestTo("https://naverapihub.apigw.ntruss.com/search-trend/v1/search"))
+          .andRespond(withSuccess("{\"results\":[{\"data\":[]}]}", MediaType.APPLICATION_JSON));
+      assertThat(production.trend("lantern", date, date.plusDays(1), "date").isArray()).isTrue();
+      assertThat(admin.queryForObject("SELECT last_value FROM public.reservations", Long.class)).isEqualTo(2L);
+      productionProvider.verify();
     }
   }
 }

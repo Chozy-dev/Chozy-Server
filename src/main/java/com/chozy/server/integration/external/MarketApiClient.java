@@ -33,6 +33,18 @@ public final class MarketApiClient {
       DateTimeFormatter.ofPattern("yyMMdd'T'HHmmss'Z'").withZone(ZoneOffset.UTC);
   private static final Duration CACHE_TTL = Duration.ofMinutes(10);
   private static final int CACHE_LIMIT = 256;
+  private static final String RESERVATION_GUARD = """
+      SELECT CASE WHEN NOT coalesce(has_function_privilege(
+          to_regprocedure('public.block_api_account(text,text)'), 'EXECUTE'), false)
+          THEN 'runtime_budget_guard_unavailable'
+      """;
+  private static final String RESERVE = "ELSE public.reserve_api_call(?, ?, true) END";
+  private static final String REQUIRE_SHARED_POLICY = """
+      WHEN NOT EXISTS (
+          SELECT 1 FROM public.api_budget_policy
+          WHERE account = ? AND api = ? AND shared_api IS NOT DISTINCT FROM ?
+      ) THEN 'shared_policy_missing'
+      """;
 
   private final RestClient http;
   private final ObjectMapper mapper;
@@ -47,12 +59,13 @@ public final class MarketApiClient {
   private final String customer;
   private final String hubId;
   private final String hubKey;
+  private final boolean requireSharedPolicy;
   private final LinkedHashMap<String, CachedResponse> cache = new LinkedHashMap<>(16, 0.75f, true);
 
   public MarketApiClient(RestClient http, ObjectMapper mapper, JdbcTemplate budgets, Clock clock,
       String coupangAccount, String naverAccount,
       String coupangAccess, String coupangSecret, String adKey, String adSecret, String customer,
-      String hubId, String hubKey) {
+      String hubId, String hubKey, boolean requireSharedPolicy) {
     this.http = http;
     this.mapper = mapper;
     this.budgets = budgets;
@@ -66,6 +79,7 @@ public final class MarketApiClient {
     this.customer = customer;
     this.hubId = hubId;
     this.hubKey = hubKey;
+    this.requireSharedPolicy = requireSharedPolicy;
   }
 
   public JsonNode products(String keyword) {
@@ -140,12 +154,13 @@ public final class MarketApiClient {
           throw new IllegalStateException("Market reservation interrupted", ex);
         }
       }
-      result = budgets.queryForObject("""
-          SELECT CASE WHEN NOT coalesce(has_function_privilege(
-              to_regprocedure('public.block_api_account(text,text)'), 'EXECUTE'), false)
-              THEN 'runtime_budget_guard_unavailable'
-              ELSE public.reserve_api_call(?, ?, true) END
-          """, String.class, account, api);
+      if (requireSharedPolicy) {
+        String parent = "trend".equals(api) ? "hub" : null;
+        result = budgets.queryForObject(RESERVATION_GUARD + REQUIRE_SHARED_POLICY + RESERVE,
+            String.class, account, api, parent, account, api);
+      } else {
+        result = budgets.queryForObject(RESERVATION_GUARD + RESERVE, String.class, account, api);
+      }
       if (!"interval".equals(result)) break;
     }
     if ("trend".equals(api) && "exhausted:day".equals(result)) throw new DataLabDailyLimit();
