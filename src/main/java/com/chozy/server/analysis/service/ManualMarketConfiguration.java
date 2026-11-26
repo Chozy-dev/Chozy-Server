@@ -40,7 +40,7 @@ class ManualMarketConfiguration {
         .followRedirects(HttpClient.Redirect.NEVER).build();
     var factory = new JdkClientHttpRequestFactory(http);
     factory.setReadTimeout(Duration.ofSeconds(8));
-    var client = new MarketApiClient(RestClient.builder().requestFactory(factory).build(), jdbc, clock,
+    var client = new MarketApiClient(RestClient.builder().requestFactory(factory).build(), mapper, jdbc, clock,
         settings.coupangAccount(), settings.naverAccount(), settings.coupangAccessKey(), settings.coupangSecretKey(),
         settings.adKey(), settings.adSecret(), settings.adCustomerId(), settings.hubId(), settings.hubKey());
     return new MarketManualAnalysisEngine(client, mapper, clock);
