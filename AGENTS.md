@@ -1,7 +1,7 @@
 # 작업 규칙
 
 - 먼저 `README.md`, `docs/CONTEXT.md`, `docs/BACKEND.md`와 해당 API의 `docs/references/` 원본을 확인한다.
-- 외부 API 호출 한도를 확인할 때는 [Collector API 계약](https://github.com/Chozy-dev/Chozy-DataCollector/blob/main/docs/API_CONTRACTS.md#외부-api-호출-한도)의 공급사 기준·원본 근거와 [Spring 개발용 상한](docs/BACKEND.md#실데이터-검증용-공동-호출-한도)을 함께 확인한다.
+- 외부 API 호출 한도를 확인할 때는 [API_USAGE](docs/API_USAGE.md)의 공급사 기준·원본 근거와 [Spring 개발용 상한](docs/API_USAGE.md#chozy-내부-호출-예산)을 함께 확인한다.
 - 사용자가 다음 작업을 맡기고 범위를 따로 지정하지 않으면 `docs/CONTEXT.md`의 개발 순서에서 가장 앞선 미완료 작업부터 진행한다.
 - Java 21/Maven Wrapper를 사용한다. 검증은 `./mvnw.cmd -B verify`로 수행한다.
 - 기본/테스트 환경은 DB·외부 API에 접속하지 않는다. 운영 DB, Docker, Collector 배치나 migration을 임의 실행하지 않는다.
@@ -12,5 +12,5 @@
 - `temp.md`는 `.gitignore`로 제외하고 커밋하지 않는다. 유지보수 규칙은 `docs/BACKEND.md`에 모아 중복 보고서를 만들지 않는다.
 
 - 저장소 변경 작업이 끝날 때마다 `docs/CONTEXT.md`를 확인하고 이번 변경이 현재 진척, 구조 요약, 알려진 문제, 검증 결과, 다음 작업에 미친 영향을 반영한다. 상태가 바뀐 항목을 갱신하며 작업 이력을 누적하지 않는다.
-- 사용법은 README, 진행 상태는 docs/CONTEXT.md, 상세 아키텍처·개발 규칙은 docs/BACKEND.md, 작업 보고는 temp.md에 기록한다. 같은 내용을 여러 문서에 복제하지 않는다.
+- 사용법은 README, 진행 상태는 docs/CONTEXT.md, 공통 개발 규칙은 docs/BACKEND.md, 기능 계약은 BACKEND의 문서 색인이 가리키는 문서, 작업 보고는 temp.md에 기록한다. 같은 내용을 여러 문서에 복제하지 않는다.
 - 테스트는 운영 코드의 패키지/책임에 맞춰 배치하고 테스트 fixture는 support에서 명시적으로 가져온다. 편집 시 .editorconfig를 따른다.

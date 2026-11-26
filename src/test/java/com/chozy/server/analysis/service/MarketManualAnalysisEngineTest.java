@@ -47,7 +47,7 @@ class MarketManualAnalysisEngineTest {
   private final MockRestServiceServer server = MockRestServiceServer.bindTo(http).build();
   private final MarketManualAnalysisEngine engine = new MarketManualAnalysisEngine(
       new MarketApiClient(http.build(), mapper, jdbc, CLOCK, "coupang", "naver", "access", "secret",
-          "ad-key", "ad-secret", "customer", "hub-id", "hub-key"), mapper, CLOCK);
+          "ad-key", "ad-secret", "customer", "hub-id", "hub-key", false), mapper, CLOCK);
 
   @Test
   void createsMarketSnapshotAndCachesSuccessfulLookups() {

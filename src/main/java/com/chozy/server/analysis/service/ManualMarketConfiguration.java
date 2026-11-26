@@ -13,6 +13,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.env.Environment;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
@@ -25,7 +26,7 @@ import org.springframework.web.client.RestClient;
 @EnableConfigurationProperties(ManualMarketConfiguration.Settings.class)
 class ManualMarketConfiguration {
   @Bean
-  ManualAnalysisEngine marketAnalysisEngine(Settings settings, ObjectMapper mapper, Clock clock) {
+  ManualAnalysisEngine marketAnalysisEngine(Settings settings, ObjectMapper mapper, Clock clock, Environment environment) {
     var source = new DriverManagerDataSource(
         settings.budgetDbUrl(), settings.budgetDbUsername(), settings.budgetDbPassword());
     var jdbcOptions = new Properties();
@@ -42,7 +43,8 @@ class ManualMarketConfiguration {
     factory.setReadTimeout(Duration.ofSeconds(8));
     var client = new MarketApiClient(RestClient.builder().requestFactory(factory).build(), mapper, jdbc, clock,
         settings.coupangAccount(), settings.naverAccount(), settings.coupangAccessKey(), settings.coupangSecretKey(),
-        settings.adKey(), settings.adSecret(), settings.adCustomerId(), settings.hubId(), settings.hubKey());
+        settings.adKey(), settings.adSecret(), settings.adCustomerId(), settings.hubId(), settings.hubKey(),
+        environment.matchesProfiles("prod"));
     return new MarketManualAnalysisEngine(client, mapper, clock);
   }
 
