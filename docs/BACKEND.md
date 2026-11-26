@@ -6,9 +6,7 @@
 
 설정은 `application.yml`을 공통값으로, `application-{profile}.yml`을 환경 차이로 관리한다. 비밀값은 환경변수로 주입하며 `.env` 자동 로드를 가정하지 않는다. 기본/일반 테스트 환경은 DB 없이 실행한다. DB 접속은 격리 개발용 `dbdev` 또는 별도 검토한 `database/prod`에서 활성화한다.
 
-기본 `ddl-auto=none`, DB 프로필은 `validate`, SQL init은 never다. Hibernate는 테이블을 생성하지 않는다. Flyway 의존성은 도입했으며 `dbdev`에서만 startup migration을 허용한다. `database/prod`는 disabled이고 외부 설정으로 켜도 연결 전 안전 검증에서 거부한다. JWT는 Spring Security OAuth2 JOSE의 Nimbus 구현을 사용한다. Actuator는 미도입이다.
-
-CORS는 `CORS_ALLOWED_ORIGINS`에 정확한 HTTP(S) origin을 쉼표로 설정한다. 기본은 빈 목록, wildcard·경로·사용자정보는 거부한다. Bearer 헤더 방식의 Stateless 구성을 전제로 credentials는 false이고 CSRF/form login/basic login/session/request cache를 사용하지 않는다. 쿠키 인증을 도입하면 CSRF·CORS 정책을 다시 검토한다. SQL/바인딩 로그는 제한하고 요청 본문·Authorization·예외 원문을 로깅하지 않는다.
+DB 자동 초기화는 [환경과 migration 경계](#환경과-migration-경계), 인증과 CORS는 [보안 계약](#응답예외보안)을 따른다. Actuator는 미도입이다.
 
 ## 패키지와 의존 방향
 
@@ -34,6 +32,8 @@ CORS는 `CORS_ALLOWED_ORIGINS`에 정확한 HTTP(S) origin을 쉼표로 설정�
 DTO는 API 입력·출력 계약이며 Entity를 그대로 반환하거나 요청 DTO로 바인딩하지 않는다. 다른 도메인의 Repository/Entity에 직접 의존하기보다 해당 도메인의 필요한 Service 기능을 통해 접근한다. 외부 HTTP/SQL 형식을 업무 Service에 흩뿌리지 않는다. common에는 업무 점수·사용량·관심상품 규칙을 넣지 않는다.
 
 ## 응답·예외·보안
+
+CORS는 `CORS_ALLOWED_ORIGINS`에 정확한 HTTP(S) origin을 쉼표로 설정한다. 기본은 빈 목록이며 wildcard·경로·사용자정보는 거부한다. Bearer 인증은 stateless로 운영하며 credentials는 false이고 CSRF·form login·basic login·session·request cache는 사용하지 않는다. 쿠키 인증 도입 시 CSRF·CORS 정책을 다시 검토한다. SQL과 바인딩 로그를 제한하고 요청 본문·Authorization·예외 원문을 기록하지 않는다.
 
 성공은 `ApiResponse<T>(status,message,data)`로 반환한다. 생성 API는 HTTP 201과 envelope.status=201을 함께 지정한다. 삭제/로그아웃처럼 데이터가 없는 명세는 data=null을 유지한다. 전역 성공 응답 자동 wrapping은 하지 않는다.
 
@@ -93,13 +93,11 @@ Collector 운영 DB의 함수 실행 권한은 `access.py`의 SECURITY DEFINER �
 - 공개 `GET /home/keywords/naver`와 `GET /home/keywords/compare`는 선택값 `themeCode`를 양의 정수로 받는다. 최신 완료 네이버 발행본을 기준으로 코드가 가장 작은 테마를 기본 선택하고 순위순 최대 10개를 사용한다. 요청한 테마가 발행본에 없으면 요청 코드와 빈 항목을 반환한다. 발행본 자체가 없으면 갱신 시각과 선택 코드는 null이다.
 - 비교는 같은 기준일이며 상품이 있는 완료 쿠팡 발행본에서 키워드별 고유 일치 상품 수를 사용한다. 1개 이상과 0개를 각각 `matchedKeywords`와 `unmatchedKeywords`로 반환하고 두 발행 시각 중 나중 값을 사용한다. 비교할 쿠팡 발행본이 없으면 두 목록을 비우고 안내를 반환한다. 불완전한 일치 건수와 미등록 조회 제공자는 H003/503이다.
 
-## Docker 연결 계획
-
-격리 개발 DB는 [README의 Compose](../README.md#격리-개발-db-실행)로 실행한다. 배포 시 Spring과 Collector의 실제 네트워크를 확인하고 Collector 조회·공동 예산 연결을 별도로 설정한다. Spring 컨테이너는 검토한 external network를 사용하고, 호스트 실행은 검토한 공개 포트로 접속한다.
-
 ## Spring DB 기반과 회원 정책
 
 ### 환경과 Migration 경계
+
+기본 `ddl-auto=none`, DB 프로필은 `validate`, SQL init은 `never`다. 기동 시 Flyway는 `dbdev`에서만 허용하며 `database/prod`에서 활성화를 시도하면 DB 연결 전에 거부한다. 배포에서는 Collector 조회와 공동 예산 접속을 각각 설정한다. 컨테이너는 검토한 external network를 쓰고 호스트 실행은 검토한 공개 포트로 접속한다.
 
 `compose.dev.yml`의 프로젝트는 `chozy-spring-dev`, 컨테이너는 `chozy-spring-dev-postgres-1`, volume은 `chozy-spring-dev_spring_dev_data`, network는 `chozy-spring-dev_spring_dev`다. PostgreSQL 16을 `127.0.0.1:55432`에만 공개한다. Collector의 5432·`product-data-collector_postgres_data`·`product-data-collector_default`와 연결하거나 공유하지 않는다. stop/down 시 volume은 보존하며 `down -v`는 사용하지 않는다. 이 개발용 관리자 계정은 격리 개발에 한정하며 운영 권한 모델로 복제하지 않는다.
 
@@ -129,17 +127,12 @@ Flyway core와 PostgreSQL 모듈은 Boot BOM 버전을 사용한다. `V1__create
 4. 카카오·네이버 로그인과 기존 계정 연결은 미구현이다. 후속 외부 계정 테이블에는 `(provider, provider_user_id)` Unique가 필요하다. 동일 DI로 검증된 회원은 별도 계정 생성보다 기존 회원 연결을 우선 검토하되 본인 확인과 계정 탈취 방지 정책을 확정한다. 이메일/전화번호 일치만으로 자동 연결하지 않는다.
 5. 이메일 인증과 비밀번호 찾기·재설정은 후속이다. 기획서의 이메일은 알림용 필수 입력이며, 인증을 도입하면 목적과 계약을 정한다.
 
-### 검증 원칙
-
-기본 Maven verify는 공통 회귀·DB 설정 안전 검증·JWT·가입 정책을 DB 없이 실행한다. `-Pdb-test verify`는 Testcontainers가 생성한 PostgreSQL 16 URL만 사용하고 Flyway를 적용한 뒤 JPA validate·저장/조회를 확인한다. 운영/개발 DB URL은 테스트 입력으로 받지 않는다. Unique/동시 요청·이메일 canonical CHECK·nullable DI와 합성 DI Unique·중복 실패 후 전체 rollback 및 연결 복구·Migration 재실행을 검증한다. 테스트 데이터는 폐기 컨테이너에만 저장하고 실제 개발 DB를 truncate/clean하지 않는다. Docker가 없을 때 성공으로 건너뛰지 않는다.
-
 ## 자료 차이와 미확정 사항
 
 - 서버 참고 자료는 PDF 1개와 Markdown 41개(실제 URL이 있는 API 39개, 템플릿 2개)다. 공통/인증 에러 표는 서버 참고 폴더에 없어 Collector `docs/references/API 명세서/에러 코드` 원본을 읽었다. 원본 자료는 수정하지 않았다.
 - 오류 envelope는 빈 템플릿의 A007 예시에만 명시되어 있다. errors 항목의 세부 필드/값은 정의되지 않아 빈 배열로 유지한다. 새 traceId/timestamp/path 필드를 만들지 않았다. A007은 코드 표에 없어 등록하지 않았다.
-- 토큰 미제공에 대한 별도 에러 코드가 없어 현재 인증 진입 실패는 A004를 사용한다. Access 만료 A003, Refresh 만료 A005, 누락·서명/형식/유형 오류 A004를 적용한다. 406 등 표에 없는 HTTP 오류 정책은 추가 확정이 필요하다. 현재 미분류 MVC 오류는 C004로 안전하게 처리한다.
-- 기획서의 휴대폰 본인인증 필수/DI 해시 정책이 회원가입 DTO 명세에는 빠져 있다. 운영 가입 구현 전에 업체 계약·필드와 정합성을 맞춘다. 소셜 로그인/이메일 발송 계약도 미정이다.
-- 기획서의 과거 수집/호출 가정은 최신 Collector CONTEXT/DATABASE/API_CONTRACTS와 실제 코드의 운영 상태를 대체하지 않는다. 예: 도매매 Private 승인/지속 처리, 90일 coverage, 운영 권한 전환은 완료로 보지 않는다.
+- 인증·토큰 오류는 [인증 오류 계약](#오류-계약-보완)을 따른다. 406 등 표에 없는 HTTP 오류 정책은 미확정이며 미분류 MVC 오류는 C004로 처리한다.
+- 본인인증·DI·소셜 연결의 명세 차이는 [미구현 인증과 원본 차이](#미구현-인증과-원본-차이)에 있다. 수집·호출 정책의 최신 상태는 [Collector 문서](https://github.com/Chozy-dev/Chozy-DataCollector/blob/main/docs/CONTEXT.md)를 참고한다.
 
 ## 코드와 테스트 배치
 
@@ -151,7 +144,7 @@ Java는 UTF-8, 공백 2칸을 사용하며 Maven XML은 공백 4칸을 사용한
 
 다음 구현 범위는 [서버 개발 순서](CONTEXT.md#개발-순서)를 따른다.
 
-`./mvnw.cmd -B verify`는 외부 API·DB 없이 공통 응답, MVC 오류, 민감정보 비노출, 보안 차단, CORS, OpenAPI와 DB 인프라 부재를 검증한다. 테스트 전용 Probe Controller는 src/test에만 두며 배포 JAR에는 포함되지 않는다. 데이터/외부 시스템 통합 검증은 별도 격리 환경과 명시적인 자격증명으로 추가한다. 운영 DB로 실패를 해결하지 않는다.
+[README의 검증 명령](../README.md#검증)을 사용한다. 기본 회귀는 DB 없이 공통 응답·MVC 오류·비밀값 비노출·인증·CORS·OpenAPI·DB 설정 경계를 검증한다. `db-test`는 Testcontainers의 전용 PostgreSQL 16에서 Flyway와 JPA validate를 실행하고 동시 요청·Unique·정규화 CHECK·nullable DI·실패 롤백과 재연결을 검증한다. 운영·개발 DB URL은 입력으로 받지 않으며 Docker가 없으면 실패한다. 테스트 전용 Controller는 `src/test`에 둔다.
 
 다음 API는 원문 method/path/request/response/JWT부터 확인하고 해당 기능의 Controller·DTO·Service·필요한 Repository만 추가한다. 인증 규칙과 소유권, 실제 HTTP 상태/envelope 일치, 정상/검증/인증/권한 오류 테스트를 함께 작성한다. 자체 데이터 변경은 전용 migration으로 리뷰한다. 완료 발행 조회와 실시간 호출은 별도 통합 책임으로 유지한다. 구현하지 않은 API를 문서나 코드에 엔드포인트로 등록하지 않는다.
 
@@ -184,7 +177,7 @@ Java는 UTF-8, 공백 2칸을 사용하며 Maven XML은 공백 4칸을 사용한
 
 ### JWT와 Refresh 저장·수명
 
-HS256만 허용하며 환경변수 `JWT_SECRET_BASE64`에 CSPRNG로 생성한 32바이트 이상의 키를 Base64로 넣는다. DB 프로필은 키 미제공·잘못된 인코딩·짧은 키·0 이하 수명에 기동 실패한다. 개발/운영 기본 비밀키는 없다. 키·비밀번호·토큰 원문은 로그/오류 응답에 넣지 않고 민감 DTO의 toString도 감춘다.
+Spring Security OAuth2 JOSE의 Nimbus 구현을 사용한다. HS256만 허용하며 환경변수 `JWT_SECRET_BASE64`에 CSPRNG로 생성한 32바이트 이상의 키를 Base64로 넣는다. DB 프로필은 키 미제공·잘못된 인코딩·짧은 키·0 이하 수명에 기동 실패한다. 개발/운영 기본 비밀키는 없다. 키·비밀번호·토큰 원문은 로그/오류 응답에 넣지 않고 민감 DTO의 toString도 감춘다.
 
 issuer=chozy, sub=회원 ID, type=access/refresh, 임의 UUID jti, iat/exp를 서명한다. 서명/알고리즘/issuer/유형/필수 claim/시각을 검증하며 시계 유예는 없다. `JWT_ACCESS_SECONDS` 기본 3600(1시간), `JWT_REFRESH_SECONDS` 기본 1209600(14일)이다. 운영은 TLS 및 시간 동기화가 필요하며 키 변경은 기존 토큰을 무효화한다. 키 버전/무중단 교체 정책은 후속 과제다. 외부 인증 서버·Redis는 도입하지 않았다.
 
@@ -245,7 +238,7 @@ DB 프로필에서 JWT로 `POST /search/analyses/manual`과 `GET /search/analyse
 
 #### 실데이터 검증용 공동 호출 한도
 
-아래 값은 개발 환경에서 직접 입력 분석을 최대 호출량으로 하루 10건 검증할 수 있도록 정한 Chozy 내부 예약 상한이다. `day`는 한국 시간 자정에 바뀐다.
+아래 값은 개발 환경에서 직접 입력 분석을 최대 호출량으로 하루 10건 검증할 수 있도록 정한 Chozy 내부 예약 상한이다. `day`는 한국 시간 자정에 바뀐다. [Collector의 공급사 호출 한도](https://github.com/Chozy-dev/Chozy-DataCollector/blob/main/docs/API_CONTRACTS.md#외부-api-호출-한도)에서 실제 서비스 기준과 미확정 항목을 확인한다.
 
 | 외부 API | 계정 별칭 | `api` | `limits` | `min_interval` |
 | --- | --- | --- | --- | --- |
