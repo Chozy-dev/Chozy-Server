@@ -51,6 +51,11 @@ app:
       db-url: ${CHOZY_RECOMMENDATIONS_DB_URL:}
       db-username: ${CHOZY_RECOMMENDATIONS_DB_USERNAME:}
       db-password: ${CHOZY_RECOMMENDATIONS_DB_PASSWORD:}
+    market-publications:
+      enabled: ${APP_HOME_MARKET_PUBLICATIONS_ENABLED:false}
+      db-url: ${CHOZY_HOME_MARKET_DB_URL:}
+      db-username: ${CHOZY_HOME_MARKET_DB_USERNAME:}
+      db-password: ${CHOZY_HOME_MARKET_DB_PASSWORD:}
   analysis:
     market:
       enabled: ${APP_ANALYSIS_MARKET_ENABLED:false}

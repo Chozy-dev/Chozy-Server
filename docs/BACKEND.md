@@ -59,7 +59,18 @@ Collector의 `products/product_options/product_history/product_events`는 최신
 
 공급 추천은 검토된 스키마의 SQL `public.read_supply_home(source,size)`로 읽는다(size 1~1000, source DOMEME/OWNERCLAN). 발행본의 `updatedAt`과 순위순 `items`를 응답에 사용한다. 완료본 없음(SQL NULL)과 완료본의 빈 items를 구분한다. 접속 또는 응답 해석 실패는 H001/503이다.
 
-쿠팡은 `coupang_API/persistence/best.py:read_published`, 네이버는 `naver_API/queries.py:read_published/read_compare`가 실제 조회 계약이다. Python 함수는 Spring에서 직접 호출할 HTTP 서버가 아니다. 향후 해당 SQL 의미를 JDBC로 구현하고 필요한 읽기 권한을 별도 확인한다. 한 SQL로 최신 완료 배치 전체를 고르고 선택 카테고리/테마가 없다고 과거 데이터를 섞지 않는다. 비교는 네이버와 같은 날짜의 완료 쿠팡만 사용한다. 현재 쿠팡/네이버 Spring runtime 권한은 확정되지 않았다.
+쿠팡과 네이버 시즌 JDBC 조회는 각각 Collector의 `coupang_API/persistence/best.py:read_published`, `naver_API/queries.py:read_published/read_compare`의 발행 계약을 따른다. API마다 SQL 한 문장으로 최신 완료 배치를 고르므로 메타데이터와 상품·키워드를 같은 DB 스냅샷에서 읽는다. 비교는 같은 기준일의 완료 쿠팡 발행본에서 상품명과 키워드의 공백을 제거한 뒤 포함 여부를 확인하고, 카테고리를 가로질러 상품 ID를 중복 제거해 센다. 네이버 단독 조회는 쿠팡 객체에 의존하지 않는다.
+
+홈 시장 조회 전용 Collector 로그인에는 `public` 스키마 `USAGE`와 아래 조회 권한이 필요하다. 테이블 이름은 Collector 운영 스키마의 `public` 기준이다. 연결에는 읽기 전용 기본 트랜잭션과 제한 시간을 설정한다. 운영 로그인과 권한 적용은 별도 배포 작업이다.
+
+| 객체 | 필요한 SELECT 컬럼 |
+| --- | --- |
+| `coupang_best_batches` | `snapshot_date, published_at, status` |
+| `coupang_best_categories` | `snapshot_date, category_id, category_name, status` |
+| `coupang_best_published` | `snapshot_date, category_id, rank, product_id, product_name, price, is_rocket, previous_rank, rank_change, rank_status` |
+| `naver_season_batches` | `snapshot_date, published_at, status` |
+| `naver_season_themes` | `snapshot_date, theme_code, theme_name` |
+| `naver_season_published` | `snapshot_date, theme_code, rank, keyword, monthly_search_count, growth_rate` |
 
 Spring 사용자/인증/리포트/관심상품/알림/사용량 데이터는 `chozy` 소유다. `db/migration/chozy`와 `chozy.flyway_schema_history`는 Collector Python migration/ledger와 독립적이다. 운영에서는 전용 migration 관리자와 비소유 Spring runtime 로그인을 구분하며 runtime에는 DDL 권한을 주지 않는다. 운영 Flyway 적용은 별도 검증·승인 작업이며 애플리케이션 startup에서는 disabled다. 필요 시 자체 저장과 Collector 조회에 별도 DataSource/계정을 둔다. Collector 관리자 계정을 재사용하지 않는다.
 
@@ -71,7 +82,7 @@ Collector 운영 DB의 함수 실행 권한은 `access.py`의 SECURITY DEFINER �
 
 - 공개 `GET /home/products/recommended`는 필수 `source`(`DOMEME`, `OWNERCLAN`)와 선택 `size`(기본 10, 1~1000)를 받는다. 필수값 누락은 C008/400, 타입과 소싱처 코드 오류는 C005/400, 크기 범위 오류는 C001/400이다.
 - `RecommendedProductReader`는 한 소싱처의 최신 완료 발행본에서 요청한 개수까지 순위순으로 읽는다. HTTP 응답은 발행본의 `asOf`를 `updatedAt`으로 반환하고 순위, 미확인 지표의 null, 실제 측정값 0을 유지한다. 조회 결과에 발행본이 없으면 `updatedAt: null, items: []`를, 상품이 없는 완료 발행본은 `items: []`와 해당 발행본 시각을 반환한다. 두 경우 모두 200이다.
-- 발행본 조회 제공자가 미등록이거나 데이터 소스를 사용할 수 없으면 H001/503을 반환한다. Collector SQL 연결은 실제 데이터 연동 단계에 둔다.
+- 발행본 조회 제공자가 미등록이거나 데이터 소스를 사용할 수 없으면 H001/503을 반환한다. 추천 JDBC 설정은 홈 시장 발행본 JDBC와 독립적으로 활성화한다.
 
 ## 홈 쿠팡 베스트 상품 조회
 

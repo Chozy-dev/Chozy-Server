@@ -201,9 +201,11 @@ Swagger에서 인증·회원·홈·검색·리포트·관심상품·알림 API�
 
 `GET /home/products/recommended?source=DOMEME`는 로그인 없이 호출할 수 있습니다. 소싱처는 `DOMEME`, `OWNERCLAN` 중 하나이며 `size`를 생략하면 10개까지 요청합니다. `dbdev` 또는 `database`에서 [.env.example](.env.example)의 추천 조회 설정과 `APP_HOME_RECOMMENDATIONS_ENABLED=true`를 주입하면 Collector의 최신 완료 발행본을 읽습니다. Collector DB 로그인에는 `public.read_supply_home(text, integer)` 실행 권한이 필요합니다. 설정 전에는 H001/503을 반환합니다.
 
-`GET /home/keywords/coupang`은 로그인 없이 호출할 수 있습니다. `categoryId`를 생략하면 최신 완료 발행본에서 ID가 가장 작은 카테고리를 선택합니다. `dev` Swagger에도 표시되며 실제 발행본 조회를 연결하기 전에는 H002/503을 반환합니다.
+`GET /home/keywords/coupang`은 로그인 없이 호출할 수 있습니다. `categoryId`를 생략하면 최신 완료 발행본에서 ID가 가장 작은 카테고리를 선택합니다.
 
-`GET /home/keywords/naver`와 `GET /home/keywords/compare`는 로그인 없이 호출할 수 있습니다. `themeCode`는 선택값이며 실제 발행본 조회를 연결하기 전에는 H003/503을 반환합니다.
+`GET /home/keywords/naver`와 `GET /home/keywords/compare`는 로그인 없이 호출할 수 있습니다. `themeCode`를 생략하면 최신 완료 네이버 발행본에서 코드가 가장 작은 테마를 선택합니다. 비교에는 같은 기준일의 쿠팡 발행본을 사용합니다.
+
+`dbdev` 또는 `database`에서 [.env.example](.env.example)의 홈 시장 발행본 설정과 `APP_HOME_MARKET_PUBLICATIONS_ENABLED=true`를 주입하면 세 API가 Collector DB를 읽습니다. [필요한 읽기 권한](docs/BACKEND.md#collector와-postgresql-경계)을 가진 전용 로그인으로 연결합니다. 비활성화하거나 조회에 실패하면 쿠팡 베스트는 H002/503, 네이버 시즌·비교는 H003/503을 반환합니다.
 
 `dbdev` Swagger에서 회원탈퇴를 테스트하려면 테스트용 회원으로 로그인하고 `DELETE /my/account`에 현재 비밀번호를 `password`로 보냅니다. 성공하면 해당 계정의 로그인과 기존 토큰 사용이 차단됩니다.
 
