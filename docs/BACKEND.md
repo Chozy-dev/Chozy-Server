@@ -81,7 +81,7 @@ Collector 운영 DB의 함수 실행 권한은 `access.py`의 SECURITY DEFINER �
 ## 홈 공급 조건 우수 상품 조회
 
 - 공개 `GET /home/products/recommended`는 필수 `source`(`DOMEME`, `OWNERCLAN`)와 선택 `size`(기본 10, 1~1000)를 받는다. 필수값 누락은 C008/400, 타입과 소싱처 코드 오류는 C005/400, 크기 범위 오류는 C001/400이다.
-- `RecommendedProductReader`는 한 소싱처의 최신 완료 발행본에서 요청한 개수까지 순위순으로 읽는다. HTTP 응답은 발행본의 `updatedAt`을 반환하고 순위, 미확인 지표의 null, 실제 측정값 0을 유지한다. 조회 결과에 발행본이 없으면 `updatedAt: null, items: []`를, 상품이 없는 완료 발행본은 `items: []`와 해당 발행본 시각을 반환한다. 두 경우 모두 200이다.
+- `RecommendedProductReader`는 한 소싱처의 최신 완료 발행본에서 요청한 개수까지 순위순으로 읽는다. HTTP 응답은 발행본의 `updatedAt`을 반환하고 순위, 미확인 지표의 null, 실제 측정값 0을 유지한다. `shippingDays`는 소수를 포함할 수 있는 숫자 또는 null이다. 조회 결과에 발행본이 없으면 `updatedAt: null, items: []`를, 상품이 없는 완료 발행본은 `items: []`와 해당 발행본 시각을 반환한다. 두 경우 모두 200이다. [발행본 검증 절차](API_TESTING.md#홈-공급-추천-발행본-검증)
 - 발행본 조회 제공자가 미등록이거나 데이터 소스를 사용할 수 없으면 H001/503을 반환한다. 추천 JDBC 설정은 홈 시장 발행본 JDBC와 독립적으로 활성화한다.
 
 ## 홈 쿠팡 베스트 상품 조회
