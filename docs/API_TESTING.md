@@ -1,6 +1,36 @@
 # Spring API 테스트
 
 
+## 배포 후보 검증
+
+1. 배포할 소스에서 `mvnw.cmd -B -Pdb-test verify`를 실행합니다. 격리 PostgreSQL로 신규 설치와 기존 데이터의 스키마 업그레이드를 확인합니다.
+2. 배포 대상 DB의 적용 이력과 복구점을 확인한 뒤 필요한 Spring 마이그레이션을 전용 계정으로 적용합니다. Spring은 `prod`와 런타임 계정으로 기동합니다. Collector 조회 계정과 Spring 업무 DB 계정은 각각의 접속 설정을 사용합니다. [DB 권한과 마이그레이션](BACKEND.md#collector와-postgresql-경계)
+3. 배포 대상 주소에서 테스트 계정으로 로그인, 토큰 재발급, 마이페이지 조회를 확인합니다. 실제 프론트 origin의 CORS와 공개 설정도 확인합니다. 홈 추천을 켠다면 두 소싱처의 실제 발행본을 [홈 공급 추천 발행본 검증](#홈-공급-추천-발행본-검증)에 따라 확인합니다.
+4. 직접 입력 정밀분석을 켠다면 해당 환경의 공동 예산 정책과 예약 권한을 확인하고 [실데이터 검증](#직접-입력-정밀분석-실데이터-검증)을 실행합니다. 로컬에서 보관 데이터를 재생한 결과는 배포 대상의 실제 자격증명·발행본 검증과 구분해 기록합니다.
+
+## 홈 공급 추천 발행본 검증
+
+Collector가 점수 계산을 마치고 완료 발행한 상품을 스테이징 또는 격리 사본에서 확인합니다. Spring은 조회할 때 Collector DB의 완료 발행본을 읽습니다. 이 검증에는 소싱처 동기화 API 호출이 필요하지 않습니다.
+
+1. 추천 조회에 사용할 Spring 전용 로그인으로 Collector DB에 접속합니다. DB·로그인이 검증 대상과 일치하고 `can_execute`가 `true`인지 확인합니다.
+
+   ```sql
+   SELECT current_database(), current_user,
+          has_function_privilege(
+            current_user, to_regprocedure('public.read_supply_home(text,integer)'), 'EXECUTE'
+          ) AS can_execute;
+   ```
+
+2. 같은 로그인으로 소싱처별 발행본을 조회합니다. 두 호출은 읽기 전용 트랜잭션에서도 실행할 수 있습니다.
+
+   ```sql
+   SELECT public.read_supply_home('DOMEME', 10);
+   SELECT public.read_supply_home('OWNERCLAN', 10);
+   ```
+
+3. Spring에 `APP_HOME_RECOMMENDATIONS_ENABLED=true`와 [.env.example](../.env.example)의 `CHOZY_RECOMMENDATIONS_DB_*` 설정을 주입합니다. 로그인 토큰 없이 `GET /home/products/recommended?source=DOMEME`, `GET /home/products/recommended?source=OWNERCLAN`을 호출합니다. HTTP 200 응답에서 `updatedAt`이 SQL 결과와 같은 시각인지, `items`의 상품·순위와 소수 발송 소요일·NULL 지표가 일치하는지 대조합니다. `size=1`에서도 해당 소싱처의 1위가 반환되는지 확인합니다.
+4. SQL 결과가 NULL이면 완료 발행본이 없으므로 HTTP 200에서 `updatedAt: null`, `items: []`가 반환됩니다. 실제 상품 검증을 완료하려면 Collector가 상품이 포함된 배치를 발행한 뒤 다시 대조합니다. 완료본의 상품 수가 0이면 갱신 시각과 빈 배열이 함께 반환됩니다. H001/503이면 추천 설정과 전용 로그인의 DB 연결·함수 실행 권한부터 확인합니다.
+
 ## 직접 입력 정밀분석 실데이터 검증
 
 ### 활성화 전 확인

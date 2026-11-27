@@ -26,6 +26,6 @@ public record RecommendedProducts(
       @Schema(types = {"number", "null"}) BigDecimal supplierReliabilityScore,
       @Schema(types = {"integer", "null"}) Integer stockoutCount90d,
       @Schema(types = {"number", "null"}) BigDecimal supplierStockoutRate90d,
-      @Schema(types = {"integer", "null"}) Integer shippingDays,
+      @Schema(types = {"number", "null"}) BigDecimal shippingDays,
       BigDecimal score) {}
 }

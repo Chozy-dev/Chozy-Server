@@ -41,10 +41,10 @@ class RecommendedProductControllerTest {
   void listsTheRequestedSourcesPublishedItemsInRankOrderWithTheDefaultSize() throws Exception {
     var lantern = new RecommendedProduct(1, 10001L, "https://domeme.domeggook.com/12345678", "LED 캠핑 랜턴",
         DOMEME, new BigDecimal("8000"), new BigDecimal("94"), new BigDecimal("100"), 0,
-        null, 1, new BigDecimal("97.25"));
+        null, new BigDecimal("0.4"), new BigDecimal("97.25"));
     var charger = new RecommendedProduct(2, 10002L, "https://domeme.domeggook.com/23456789", "차량용 무선 충전기",
         DOMEME, new BigDecimal("12000"), new BigDecimal("90"), null, 1,
-        null, 2, new BigDecimal("91"));
+        null, null, new BigDecimal("91"));
     when(reader.latest(DOMEME, 10))
         .thenReturn(Optional.of(new Publication(OffsetDateTime.parse(AS_OF), List.of(lantern, charger))));
 
@@ -64,10 +64,11 @@ class RecommendedProductControllerTest {
         .andExpect(jsonPath("$.data.items[0].supplierReliabilityScore").value(100))
         .andExpect(jsonPath("$.data.items[0].stockoutCount90d").value(0))
         .andExpect(jsonPath("$.data.items[0].supplierStockoutRate90d").value(nullValue()))
-        .andExpect(jsonPath("$.data.items[0].shippingDays").value(1))
+        .andExpect(jsonPath("$.data.items[0].shippingDays").value(0.4))
         .andExpect(jsonPath("$.data.items[0].score").value(97.25))
         .andExpect(jsonPath("$.data.items[1].rank").value(2))
-        .andExpect(jsonPath("$.data.items[1].supplierReliabilityScore").value(nullValue()));
+        .andExpect(jsonPath("$.data.items[1].supplierReliabilityScore").value(nullValue()))
+        .andExpect(jsonPath("$.data.items[1].shippingDays").value(nullValue()));
   }
 
   @Test
@@ -117,6 +118,8 @@ class RecommendedProductControllerTest {
             .value("H001"))
         .andExpect(jsonPath("$.components.schemas.RecommendedProducts.properties.updatedAt.type")
             .value(containsInAnyOrder("string", "null")))
+        .andExpect(jsonPath("$.components.schemas.RecommendedProduct.properties.shippingDays.type")
+            .value(containsInAnyOrder("number", "null")))
         .andExpect(jsonPath("$.components.schemas.RecommendedProducts.properties.items.items['$ref']")
             .value("#/components/schemas/RecommendedProduct"));
   }

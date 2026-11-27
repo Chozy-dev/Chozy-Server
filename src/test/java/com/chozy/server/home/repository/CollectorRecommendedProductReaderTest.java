@@ -28,7 +28,7 @@ class CollectorRecommendedProductReaderTest {
           "batchId":"batch-1","formulaVersion":"supply_v2","items":[
             {"rank":1,"productId":10001,"productName":"랜턴","productUrl":"https://example.com/42",
              "source":"DOMEME","supplyPrice":8000,"stockoutCount90d":0,"supplierStockoutRate90d":null,
-             "score":97,"externalProductId":"42","eligible":true}
+             "shippingDays":0.4,"score":97,"externalProductId":"42","eligible":true}
           ]
         }
         """);
@@ -40,6 +40,7 @@ class CollectorRecommendedProductReaderTest {
       assertThat(item.productId()).isEqualTo(10001);
       assertThat(item.stockoutCount90d()).isZero();
       assertThat(item.supplierStockoutRate90d()).isNull();
+      assertThat(item.shippingDays()).isEqualByComparingTo("0.4");
       assertThat(item.score()).isEqualByComparingTo("97");
     });
   }
